@@ -2,7 +2,7 @@ import os
 import sys
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, g, abort
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, abort, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -458,12 +458,18 @@ def order_status(order_id):
     return redirect(request.referrer or url_for("order_detail", order_id=order_id))
 
 
+def _wants_json():
+    return request.headers.get("Accept") == "application/json"
+
+
 @app.route("/orders/<int:order_id>/messages", methods=["POST"])
 @seller_required
 def order_message(order_id):
     order = _get_own_seller_order(order_id)
     body = request.form.get("body", "").strip()
     if not body:
+        if _wants_json():
+            return jsonify(ok=False, error="Message can't be empty."), 400
         return redirect(url_for("order_detail", order_id=order_id))
     clean, matched = check_message(body)
     if not clean:
@@ -473,14 +479,39 @@ def order_message(order_id):
         )
         g.db.commit()
         app.logger.warning(f"Blocked message on order {order_id} from user {g.user['id']}: matched '{matched}'")
-        flash("Your message wasn't sent — it contains language that isn't allowed here.")
+        error = "Your message wasn't sent — it contains language that isn't allowed here."
+        if _wants_json():
+            return jsonify(ok=False, error=error)
+        flash(error)
         return redirect(url_for("order_detail", order_id=order_id))
     g.db.execute(
         "INSERT INTO messages (order_id, sender_role, sender_user_id, body) VALUES (?, 'seller', ?, ?)",
         (order_id, g.user["id"], body),
     )
     g.db.commit()
+    if _wants_json():
+        return jsonify(ok=True)
     return redirect(url_for("order_detail", order_id=order_id))
+
+
+@app.route("/orders/<int:order_id>/messages.json")
+@seller_required
+def order_messages_json(order_id):
+    g.db.execute(
+        "UPDATE messages SET read_at = datetime('now') WHERE order_id = ? AND sender_role = 'buyer' AND read_at IS NULL",
+        (order_id,),
+    )
+    g.db.commit()
+    order = _get_own_seller_order(order_id)
+    rows = g.db.execute(
+        "SELECT id, sender_role, body, created_at FROM messages WHERE order_id = ? ORDER BY created_at",
+        (order_id,),
+    ).fetchall()
+    return jsonify(
+        messages=[dict(r) for r in rows],
+        status=order["status"],
+        status_label=STATUS_LABELS[order["status"]],
+    )
 
 
 if __name__ == "__main__":

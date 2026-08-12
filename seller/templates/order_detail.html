@@ -3,7 +3,8 @@
 {% block content %}
   <h1>Order #{{ order['id'] }}</h1>
   <p class="muted">From {{ order['buyer_name'] }} · {{ order['fulfillment'] }} · placed {{ order['created_at'] }}</p>
-  <span class="badge badge-{{ order['status'] }}">{{ status_labels[order['status']] }}</span>
+  <span class="badge badge-{{ order['status'] }}" data-status-badge>{{ status_labels[order['status']] }}</span>
+  <div class="banner" data-status-banner style="display:none;"></div>
 
   <p class="pickup-line">
     <strong>{{ 'Pickup' if order['fulfillment'] == 'pickup' else 'Delivery' }}:</strong>
@@ -54,18 +55,26 @@
   </form>
 
   <h2 class="section-title">Messages with {{ order['buyer_name'] }}</h2>
-  <div class="message-thread">
-    {% for m in messages %}
-      <div class="message {{ 'message-mine' if m['sender_role'] == 'seller' else 'message-theirs' }}">
-        <span class="muted small">{{ 'You' if m['sender_role'] == 'seller' else order['buyer_name'] }} · {{ m['created_at'] }}</span>
-        <p>{{ m['body'] }}</p>
-      </div>
-    {% else %}
-      <p class="empty">No messages yet.</p>
-    {% endfor %}
+  <div data-message-thread
+       data-poll-url="{{ url_for('order_messages_json', order_id=order['id']) }}"
+       data-send-url="{{ url_for('order_message', order_id=order['id']) }}"
+       data-my-role="seller"
+       data-other-name="{{ order['buyer_name'] }}"
+       data-order-status="{{ order['status'] }}">
+    <div class="message-thread">
+      {% for m in messages %}
+        <div class="message {{ 'message-mine' if m['sender_role'] == 'seller' else 'message-theirs' }}" data-id="{{ m['id'] }}">
+          <span class="muted small">{{ 'You' if m['sender_role'] == 'seller' else order['buyer_name'] }} · {{ m['created_at'] }}</span>
+          <p>{{ m['body'] }}</p>
+        </div>
+      {% else %}
+        <p class="empty">No messages yet.</p>
+      {% endfor %}
+    </div>
+    <p class="message-error flash" style="display:none;"></p>
+    <form class="message-form form narrow" method="post" action="{{ url_for('order_message', order_id=order['id']) }}">
+      <textarea name="body" rows="2" placeholder="Message the customer about this order…" required></textarea>
+      <button type="submit" class="btn-small">Send</button>
+    </form>
   </div>
-  <form method="post" action="{{ url_for('order_message', order_id=order['id']) }}" class="form narrow">
-    <textarea name="body" rows="2" placeholder="Message the customer about this order…" required></textarea>
-    <button type="submit" class="btn-small">Send</button>
-  </form>
 {% endblock %}
