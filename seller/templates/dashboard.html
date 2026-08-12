@@ -3,52 +3,58 @@
 {% block content %}
   <h1>Orders</h1>
 
-  {% set due_soon_orders = [] %}
-  {% for o in orders %}
-    {% if o['status'] in ('placed', 'accepted') and is_due_soon(o['pickup_at']) %}
-      {% set _ = due_soon_orders.append(o) %}
-    {% endif %}
-  {% endfor %}
-  {% if due_soon_orders %}
-    <div class="banner">
-      You have {{ due_soon_orders|length }} order{{ 's' if due_soon_orders|length != 1 else '' }} due for pickup within the next 24 hours.
-    </div>
-  {% endif %}
+  <div data-orders-page
+       data-orders-poll-url="{{ url_for('dashboard_orders_json') }}"
+       data-order-url-template="{{ url_for('order_detail', order_id=999999) }}"
+       data-accept-url-template="{{ url_for('order_status', order_id=999999) }}">
 
-  <h2 class="section-title">Orders to make</h2>
-  {% if orders %}
-    <div class="order-list">
-      {% for o in orders %}
-        <div class="order-row {% if is_due_soon(o['pickup_at']) %}order-row-soon{% endif %}">
-          <a class="order-row-main" href="{{ url_for('order_detail', order_id=o['id']) }}">
-            <div>
-              <strong>{{ o['buyer_name'] }}</strong>
-              <p class="muted small">
-                Pickup {{ o['pickup_at']|pickup }} · {{ o['fulfillment'] }}
-                {% if is_due_soon(o['pickup_at']) %}<span class="badge badge-soon">Due soon</span>{% endif %}
-              </p>
-            </div>
-            <span class="badge badge-{{ o['status'] }}">{{ status_labels[o['status']] }}</span>
-            <div class="order-total">{{ o['total_cents']|usd }}</div>
-          </a>
-          {% if o['status'] == 'placed' %}
-            <div class="menu-actions">
-              <form method="post" action="{{ url_for('order_status', order_id=o['id']) }}">
-                <input type="hidden" name="status" value="accepted">
-                <button type="submit" class="btn-small">Accept</button>
-              </form>
-              <form method="post" action="{{ url_for('order_status', order_id=o['id']) }}">
-                <input type="hidden" name="status" value="declined">
-                <button type="submit" class="btn-ghost small danger">Decline</button>
-              </form>
-            </div>
-          {% endif %}
-        </div>
-      {% endfor %}
+    {% set due_soon_orders = [] %}
+    {% for o in orders %}
+      {% if o['status'] in ('placed', 'accepted') and is_due_soon(o['pickup_at']) %}
+        {% set _ = due_soon_orders.append(o) %}
+      {% endif %}
+    {% endfor %}
+    <div class="banner" data-due-soon-banner style="{{ '' if due_soon_orders else 'display:none;' }}">
+      You have <span data-due-soon-count>{{ due_soon_orders|length }}</span> <span data-due-soon-word>order{{ 's' if due_soon_orders|length != 1 else '' }}</span> due for pickup within the next 24 hours.
     </div>
-  {% else %}
-    <p class="empty">No orders to make right now.</p>
-  {% endif %}
+
+    <h2 class="section-title">Orders to make</h2>
+    <div data-orders-list-container>
+      {% if orders %}
+        <div class="order-list">
+          {% for o in orders %}
+            <div class="order-row {% if is_due_soon(o['pickup_at']) %}order-row-soon{% endif %}" data-order-row="{{ o['id'] }}">
+              <a class="order-row-main" href="{{ url_for('order_detail', order_id=o['id']) }}">
+                <div>
+                  <strong>{{ o['buyer_name'] }}</strong>
+                  <p class="muted small">
+                    Pickup {{ o['pickup_at']|pickup }} · {{ o['fulfillment'] }}
+                    {% if is_due_soon(o['pickup_at']) %}<span class="badge badge-soon">Due soon</span>{% endif %}
+                  </p>
+                </div>
+                <span class="badge badge-{{ o['status'] }}">{{ status_labels[o['status']] }}</span>
+                <div class="order-total">{{ o['total_cents']|usd }}</div>
+              </a>
+              {% if o['status'] == 'placed' %}
+                <div class="menu-actions">
+                  <form method="post" action="{{ url_for('order_status', order_id=o['id']) }}">
+                    <input type="hidden" name="status" value="accepted">
+                    <button type="submit" class="btn-small">Accept</button>
+                  </form>
+                  <form method="post" action="{{ url_for('order_status', order_id=o['id']) }}">
+                    <input type="hidden" name="status" value="declined">
+                    <button type="submit" class="btn-ghost small danger">Decline</button>
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="empty">No orders to make right now.</p>
+      {% endif %}
+    </div>
+  </div>
 
   {% if past_orders %}
     <h2 class="section-title">Past orders</h2>

@@ -319,6 +319,42 @@ def dashboard():
     )
 
 
+@app.route("/dashboard/orders.json")
+@seller_required
+def dashboard_orders_json():
+    orders = g.db.execute(
+        """SELECT o.*, u.name AS buyer_name FROM orders o
+           JOIN users u ON u.id = o.buyer_id
+           WHERE o.seller_id = ? AND o.status NOT IN ('completed', 'cancelled', 'declined')
+           ORDER BY o.pickup_at ASC""",
+        (g.seller["id"],),
+    ).fetchall()
+    result = []
+    due_soon_count = 0
+    for o in orders:
+        due_soon = scheduling.is_due_soon(o["pickup_at"])
+        if o["status"] in ("placed", "accepted") and due_soon:
+            due_soon_count += 1
+        result.append({
+            "id": o["id"],
+            "buyer_name": o["buyer_name"],
+            "pickup_display": format_pickup(o["pickup_at"]),
+            "fulfillment": o["fulfillment"],
+            "status": o["status"],
+            "status_label": STATUS_LABELS[o["status"]],
+            "total_display": usd(o["total_cents"]),
+            "due_soon": due_soon,
+        })
+    new_orders = sum(1 for o in orders if o["status"] == "placed")
+    return jsonify(orders=result, due_soon_count=due_soon_count, new_orders=new_orders)
+
+
+@app.route("/nav-status.json")
+@seller_required
+def nav_status_json():
+    return jsonify(new_orders=g.new_orders, unread_messages=g.unread_messages)
+
+
 @app.route("/menu/new", methods=["GET", "POST"])
 @seller_required
 def menu_new():

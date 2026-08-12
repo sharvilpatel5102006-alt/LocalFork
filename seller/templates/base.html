@@ -24,13 +24,15 @@
       </a>
       <nav class="nav">
         {% if g.seller %}
-          <a href="{{ url_for('menu_page') }}">Menu</a>
-          <a href="{{ url_for('dashboard') }}" class="nav-messages">
-            Orders{% if g.new_orders %} <span class="badge badge-soon">{{ g.new_orders }}</span>{% endif %}
-          </a>
-          <a href="{{ url_for('messages_inbox') }}" class="nav-messages">
-            Messages{% if g.unread_messages %} <span class="badge badge-soon">{{ g.unread_messages }}</span>{% endif %}
-          </a>
+          <span data-nav-badges data-nav-status-url="{{ url_for('nav_status_json') }}" style="display:contents">
+            <a href="{{ url_for('menu_page') }}">Menu</a>
+            <a href="{{ url_for('dashboard') }}" class="nav-messages">
+              Orders <span class="badge badge-soon" data-orders-badge style="{{ '' if g.new_orders else 'display:none;' }}">{{ g.new_orders }}</span>
+            </a>
+            <a href="{{ url_for('messages_inbox') }}" class="nav-messages">
+              Messages <span class="badge badge-soon" data-messages-badge style="{{ '' if g.unread_messages else 'display:none;' }}">{{ g.unread_messages }}</span>
+            </a>
+          </span>
         {% endif %}
         <a href="{{ CUSTOMER_SITE_URL }}">View customer site ↗</a>
         {% if g.user %}
