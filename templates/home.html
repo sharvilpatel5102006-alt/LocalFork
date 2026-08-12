@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Browse cooks near you{% endblock %}
+{% block content %}
+  <section class="hero">
+    <h1>Home-cooked food, from people near you.</h1>
+    <p>Order from home cooks and small food businesses in your neighborhood — no restaurant required.</p>
+    <form class="search" method="get" action="{{ url_for('home') }}">
+      <input type="text" name="city" placeholder="Search by city or neighborhood…" value="{{ city }}">
+      <button type="submit">Search</button>
+    </form>
+  </section>
+
+  {% if not g.seller and g.user %}
+    <div class="banner">
+      Cook at home or run a small food business? <a href="{{ url_for('become_seller') }}">Set up your seller page →</a>
+    </div>
+  {% elif not g.user %}
+    <div class="banner">
+      Want to sell your own food? <a href="{{ url_for('signup') }}">Sign up</a> and set up a seller page.
+    </div>
+  {% endif %}
+
+  <h2 class="section-title">{% if city %}Cooks near "{{ city }}"{% else %}All cooks{% endif %}</h2>
+
+  {% if sellers %}
+    <div class="grid">
+      {% for s in sellers %}
+        <a class="card" href="{{ url_for('seller_public', seller_id=s['id']) }}">
+          <div class="card-emoji">{{ s['emoji'] }}</div>
+          <div class="card-body">
+            <h3>{{ s['business_name'] }}</h3>
+            <p class="muted">{{ s['cuisine'] or 'Home cooking' }} · {{ s['city'] }}</p>
+            <p class="muted small">{{ s['item_count'] }} item{{ 's' if s['item_count'] != 1 else '' }} available</p>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No cooks found{% if city %} for "{{ city }}"{% endif %} yet. Check back soon!</p>
+  {% endif %}
+{% endblock %}

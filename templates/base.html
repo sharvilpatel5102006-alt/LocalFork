@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LocalFork{% endblock %} · LocalFork</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="{{ url_for('home') }}">🍴 LocalFork</a>
+      <nav class="nav">
+        <a href="{{ url_for('home') }}">Browse</a>
+        {% if g.user %}
+          <a href="{{ url_for('my_orders') }}">My orders</a>
+          {% if g.seller %}
+            <a href="{{ url_for('dashboard') }}">Seller dashboard</a>
+          {% else %}
+            <a href="{{ url_for('become_seller') }}">Sell your food</a>
+          {% endif %}
+          <a class="cart-link" href="{{ url_for('cart_view') }}">Cart{% if g.cart_count %} ({{ g.cart_count }}){% endif %}</a>
+          <span class="who">Hi, {{ g.user['name'] }}</span>
+          <a href="{{ url_for('logout') }}">Log out</a>
+        {% else %}
+          <a href="{{ url_for('cart_view') }}">Cart{% if g.cart_count %} ({{ g.cart_count }}){% endif %}</a>
+          <a href="{{ url_for('login') }}">Log in</a>
+          <a class="btn-small" href="{{ url_for('signup') }}">Sign up</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap main">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flashes">
+          {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">LocalFork — a marketplace for home cooks and small food businesses.</div>
+  </footer>
+</body>
+</html>

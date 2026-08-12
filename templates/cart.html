@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Your cart{% endblock %}
+{% block content %}
+  <h1>Your cart</h1>
+  {% if lines %}
+    {% if seller %}<p class="muted">Ordering from <strong>{{ seller['business_name'] }}</strong></p>{% endif %}
+    <div class="cart-lines">
+      {% for line in lines %}
+        <div class="cart-line">
+          <div class="menu-emoji">{{ line['item']['emoji'] }}</div>
+          <div class="menu-info">
+            <h3>{{ line['item']['name'] }}</h3>
+            <p class="muted">{{ line['item']['price_cents']|usd }} each</p>
+          </div>
+          <div class="qty-stepper">
+            <form method="post" action="{{ url_for('cart_update', item_id=line['item']['id']) }}">
+              <input type="hidden" name="qty" value="{{ line['qty'] - 1 }}">
+              <button type="submit" class="qty-btn" aria-label="Decrease quantity">−</button>
+            </form>
+            <span class="qty-value">{{ line['qty'] }}</span>
+            <form method="post" action="{{ url_for('cart_update', item_id=line['item']['id']) }}">
+              <input type="hidden" name="qty" value="{{ line['qty'] + 1 }}">
+              <button type="submit" class="qty-btn" aria-label="Increase quantity">+</button>
+            </form>
+          </div>
+          <div class="subtotal">{{ line['subtotal']|usd }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="cart-total">Total: <strong>{{ total|usd }}</strong></div>
+    <div class="actions">
+      <form method="post" action="{{ url_for('cart_clear') }}"><button type="submit" class="btn-ghost">Clear cart</button></form>
+      <a href="{{ url_for('checkout') }}" class="btn">Checkout</a>
+    </div>
+  {% else %}
+    <p class="empty">Your cart is empty. <a href="{{ url_for('home') }}">Browse cooks near you →</a></p>
+  {% endif %}
+{% endblock %}

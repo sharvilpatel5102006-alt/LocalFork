@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Seller dashboard{% endblock %}
+{% block content %}
+  <h1>{{ g.seller['business_name'] }}</h1>
+  <p class="muted"><a href="{{ url_for('seller_public', seller_id=g.seller['id']) }}">View your public page →</a></p>
+
+  <div class="dash-section-head">
+    <h2 class="section-title">Your menu</h2>
+    <a href="{{ url_for('menu_new') }}" class="btn-small">+ Add dish</a>
+  </div>
+  {% if items %}
+    <div class="menu-list">
+      {% for item in items %}
+        <div class="menu-item {% if not item['is_available'] %}unavailable{% endif %}">
+          <div class="menu-emoji">{{ item['emoji'] }}</div>
+          <div class="menu-info">
+            <h3>{{ item['name'] }} {% if not item['is_available'] %}<span class="muted small">(hidden)</span>{% endif %}</h3>
+            <p class="muted small">{{ item['description'] }}</p>
+            <p class="price">{{ item['price_cents']|usd }}</p>
+          </div>
+          <div class="menu-actions">
+            <a href="{{ url_for('menu_edit', item_id=item['id']) }}" class="btn-ghost small">Edit</a>
+            <form method="post" action="{{ url_for('menu_toggle', item_id=item['id']) }}">
+              <button type="submit" class="btn-ghost small">{{ 'Hide' if item['is_available'] else 'Show' }}</button>
+            </form>
+            <form method="post" action="{{ url_for('menu_delete', item_id=item['id']) }}" onsubmit="return confirm('Remove this dish?');">
+              <button type="submit" class="btn-ghost small danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No dishes yet. <a href="{{ url_for('menu_new') }}">Add your first one →</a></p>
+  {% endif %}
+
+  <h2 class="section-title">Incoming orders</h2>
+  {% if orders %}
+    <div class="order-list">
+      {% for o in orders %}
+        <a class="order-row" href="{{ url_for('order_detail', order_id=o['id']) }}">
+          <div>
+            <strong>{{ o['buyer_name'] }}</strong>
+            <p class="muted small">{{ o['created_at'] }} · {{ o['fulfillment'] }}</p>
+          </div>
+          <span class="badge badge-{{ o['status'] }}">{{ status_labels[o['status']] }}</span>
+          <div class="order-total">{{ o['total_cents']|usd }}</div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No orders yet.</p>
+  {% endif %}
+{% endblock %}

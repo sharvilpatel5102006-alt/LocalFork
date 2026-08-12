@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Checkout{% endblock %}
+{% block content %}
+  <h1>Checkout</h1>
+  <p class="muted">Ordering from <strong>{{ seller['business_name'] }}</strong></p>
+  <form method="post" class="form">
+    <label>Pickup or delivery?
+      <select name="fulfillment">
+        <option value="pickup">Pickup</option>
+        <option value="delivery">Delivery</option>
+      </select>
+    </label>
+    <label>Notes for the cook (allergies, timing, etc.)
+      <textarea name="notes" rows="3" placeholder="Optional"></textarea>
+    </label>
+    <div class="cart-total">Total: <strong>{{ total|usd }}</strong></div>
+    <p class="muted small">Payment: pay the cook directly at pickup/delivery for now. Online card payments are the next step once this goes live — see the README.</p>
+    <button type="submit" class="btn">Place order</button>
+  </form>
+{% endblock %}

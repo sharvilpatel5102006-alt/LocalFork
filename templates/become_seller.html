@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Sell your food{% endblock %}
+{% block content %}
+  <h1>Set up your seller page</h1>
+  <p class="muted">No storefront needed — just tell people what you cook and where you are.</p>
+  <form method="post" class="form narrow">
+    <label>Business or cook name <input type="text" name="business_name" value="{{ form.get('business_name','') }}" required placeholder="e.g. Maria's Kitchen"></label>
+    <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>
+    <label>Cuisine / specialty <input type="text" name="cuisine" value="{{ form.get('cuisine','') }}" placeholder="e.g. Homestyle Mexican"></label>
+    <label>Short bio <textarea name="bio" rows="3">{{ form.get('bio','') }}</textarea></label>
+    <label>Pick an emoji for your page <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
+    <button type="submit" class="btn">Create seller page</button>
+  </form>
+{% endblock %}

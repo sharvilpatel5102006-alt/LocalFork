@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "localfork",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["/Users/sharvilpatel/localfork/app.py"],
+      "port": 5050
+    }
+  ]
+}
