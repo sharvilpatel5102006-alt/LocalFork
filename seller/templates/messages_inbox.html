@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Messages{% endblock %}
+{% block content %}
+  <h1>Messages</h1>
+  {% if threads %}
+    <div class="order-list">
+      {% for t in threads %}
+        <a class="order-row" href="{{ url_for('order_detail', order_id=t['order_id']) }}">
+          <div>
+            <strong>{{ t['buyer_name'] }}</strong>
+            <p class="muted small">Order #{{ t['order_id'] }} · last message {{ t['last_message_at'] }}</p>
+          </div>
+          {% if t['unread_count'] %}
+            <span class="badge badge-soon">{{ t['unread_count'] }} new</span>
+          {% endif %}
+          <span class="badge badge-{{ t['status'] }}">{{ status_labels[t['status']] }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No messages yet.</p>
+  {% endif %}
+{% endblock %}

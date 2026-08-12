@@ -14,6 +14,9 @@
       <nav class="nav">
         {% if g.seller %}
           <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('messages_inbox') }}" class="nav-messages">
+            Messages{% if g.unread_messages %} <span class="badge badge-soon">{{ g.unread_messages }}</span>{% endif %}
+          </a>
         {% endif %}
         <a href="{{ CUSTOMER_SITE_URL }}">View customer site ↗</a>
         {% if g.user %}

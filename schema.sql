@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_role TEXT NOT NULL,
     sender_user_id INTEGER NOT NULL REFERENCES users(id),
     body TEXT NOT NULL,
+    read_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

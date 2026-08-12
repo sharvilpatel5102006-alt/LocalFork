@@ -51,6 +51,7 @@ def load_user():
     g.db = get_db()
     g.user = None
     g.seller = None
+    g.unread_messages = 0
     user_id = session.get("user_id")
     if user_id:
         g.user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -58,6 +59,14 @@ def load_user():
             g.seller = g.db.execute(
                 "SELECT * FROM seller_profiles WHERE user_id = ?", (user_id,)
             ).fetchone()
+            if g.seller:
+                row = g.db.execute(
+                    """SELECT COUNT(*) AS n FROM messages m
+                       JOIN orders o ON o.id = m.order_id
+                       WHERE o.seller_id = ? AND m.sender_role = 'buyer' AND m.read_at IS NULL""",
+                    (g.seller["id"],),
+                ).fetchone()
+                g.unread_messages = row["n"]
 
 
 @app.teardown_appcontext
@@ -247,6 +256,24 @@ def business_edit():
     return render_template("business_form.html", form=dict(g.seller))
 
 
+@app.route("/messages")
+@seller_required
+def messages_inbox():
+    threads = g.db.execute(
+        """SELECT o.id AS order_id, u.name AS buyer_name, o.status,
+                  MAX(m.created_at) AS last_message_at,
+                  SUM(CASE WHEN m.sender_role = 'buyer' AND m.read_at IS NULL THEN 1 ELSE 0 END) AS unread_count
+           FROM messages m
+           JOIN orders o ON o.id = m.order_id
+           JOIN users u ON u.id = o.buyer_id
+           WHERE o.seller_id = ?
+           GROUP BY o.id
+           ORDER BY last_message_at DESC""",
+        (g.seller["id"],),
+    ).fetchall()
+    return render_template("messages_inbox.html", threads=threads, status_labels=STATUS_LABELS)
+
+
 # ---------- Dashboard ----------
 
 @app.route("/dashboard")
@@ -391,6 +418,11 @@ def _get_own_seller_order(order_id):
 def order_detail(order_id):
     order = _get_own_seller_order(order_id)
     items = g.db.execute("SELECT * FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
+    g.db.execute(
+        "UPDATE messages SET read_at = datetime('now') WHERE order_id = ? AND sender_role = 'buyer' AND read_at IS NULL",
+        (order_id,),
+    )
+    g.db.commit()
     messages = g.db.execute(
         "SELECT * FROM messages WHERE order_id = ? ORDER BY created_at", (order_id,)
     ).fetchall()
