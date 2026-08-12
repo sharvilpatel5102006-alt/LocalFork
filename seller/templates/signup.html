@@ -12,6 +12,7 @@
 
     <label>Business or cook name <input type="text" name="business_name" value="{{ form.get('business_name','') }}" required placeholder="e.g. Maria's Kitchen"></label>
     <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>
+    <label>Pickup address <input type="text" name="address" value="{{ form.get('address','') }}" placeholder="Only shown to customers after they order"></label>
     <label>Cuisine / specialty <input type="text" name="cuisine" value="{{ form.get('cuisine','') }}" placeholder="e.g. Homestyle Mexican"></label>
     <label>Short bio <textarea name="bio" rows="3">{{ form.get('bio','') }}</textarea></label>
     <label>Business photo (optional) <input type="file" name="photo" accept="image/*"></label>

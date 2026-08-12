@@ -19,18 +19,28 @@ They're separate Flask apps, on separate ports, with separate templates — but 
 
 **Customer site:**
 - Browse & search cooks by city
-- Public seller pages with menu, prices, bio
-- Cart with +/- quantity steppers, checkout (pickup or delivery)
-- Buyer signup/login and order history/tracking
+- Public seller pages with menu, prices, bio (business address stays private until you order — see below)
+- Cart with +/- quantity steppers
+- Checkout: pick a pickup date & time (as soon as the order can realistically be made, up to **7 days** out — see "Scheduling rules")
+- Order page: seller's pickup address (revealed once you've ordered), a message thread with the cook, and a cancel button that enforces the cancellation policy
+- Buyer signup/login, order history, and a "due soon" reminder banner for pickups within 24 hours
 
 **Seller portal:**
 - Dedicated signup (creates account + business profile together) or "add a seller profile" for an existing account
-- Dashboard: add/edit/hide/delete menu items, with a photo per dish
-- Business page photo (shown on the browse grid and seller page instead of the emoji, once uploaded)
-- Incoming orders with status updates (placed → accepted → ready → completed)
+- Dashboard: add/edit/hide/delete menu items, each with a photo and an estimated prep time; orders sorted soonest-pickup-first with a "due soon" banner/badges
+- Accept or decline each incoming order with one click
+- Business page: photo, city, and a **pickup address that's private** until a customer actually orders
+- Order page: update status (accepted → ready → completed), message the customer, see the late-cancellation-fee flag if a customer cancelled late
 
 **Both sites:**
 - `/account` — anyone can set their display name and upload a profile photo; it shows up as a small avatar in the nav on both sites (falls back to an initial-letter circle if no photo is set)
+- In-app messaging per order (no email/SMS involved). Messages run through a small word filter — a blocked message never reaches the other person; the attempt is logged to a `flagged_messages` table (and the dev-side app log) instead of being silently dropped with no record.
+
+### Scheduling rules
+
+- A customer can book a pickup slot anywhere from **as soon as the order can be made** up to **7 days** ahead. "As soon as it can be made" is the *median* of the estimated prep times across the distinct dishes in the order (e.g. one dish takes 12 minutes, another takes 18 → the order is quoted at 15 minutes) — set per-dish by the seller in the menu form.
+- **Cancelling** an order: free more than 24 hours before pickup; within 24 hours, the full order amount applies as a late-cancellation fee (recorded as a flag today — see "Going live" for wiring up a real charge); inside the last 15 minutes, cancellation is blocked entirely.
+- There's no email/SMS reminder system connected, so "notify people a day ahead" is implemented as an **in-app banner**: anyone with a pickup due within 24 hours sees it right on their orders/dashboard page next time they load it. Wiring up real push/email/SMS reminders is a "Going live" step (needs a mail/SMS provider + a scheduler).
 
 Uploaded photos (dish, business, profile) are stored in `static/uploads/` and shared between both apps automatically, since they read the same folder. Payment today is "pay the cook directly at pickup/delivery" — no card processing yet. See "Going live" below.
 
@@ -107,6 +117,10 @@ Everything above runs only on this computer. To get real public links, roughly i
 6. **Add real payments.** The natural fit is **Stripe Connect**, built for marketplaces where money needs to flow through to many different sellers. Each cook connects their own Stripe account for payouts. I can write the integration — creating the Stripe account and agreeing to its terms has to be done by you.
 
 7. **Check food-selling regulations before real money changes hands.** Most US states have "cottage food laws" governing what home cooks can legally sell and whether they need a permit; this varies by state/country. Worth a quick search for your state's rules before treating this as a real business.
+
+8. **Real reminder notifications.** Today "due soon" is a banner shown when someone happens to load the page. For an actual email/SMS/push reminder sent ~24h before pickup, you'd add a scheduler (e.g. a cron job or APScheduler) that periodically scans for orders in that window and sends through a provider like Postmark/SendGrid (email) or Twilio (SMS) — both require creating an account with that provider.
+
+9. **Actually charge the late-cancellation fee.** Right now a late cancellation just flags the order (`late_cancellation = 1`) and shows the amount owed — no card is charged, since there's no payment processor connected yet. Once Stripe is wired up (step 6), this becomes a real charge against the card on file.
 
 ## Renaming
 

@@ -118,19 +118,38 @@ a:hover { text-decoration: underline; }
 
 .order-list { display: flex; flex-direction: column; gap: 10px; }
 .order-row {
-  display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  display: flex; align-items: center; gap: 16px;
   background: var(--paper); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px 18px; color: var(--ink);
 }
-.order-row:hover { border-color: var(--orange); text-decoration: none; }
+.order-row-soon { border-color: #f0b060; background: #fffaf2; }
+a.order-row { justify-content: space-between; }
+.order-row:hover, .order-row-main:hover { border-color: var(--orange); text-decoration: none; }
+.order-row-main {
+  display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  flex: 1; min-width: 0; color: var(--ink);
+}
 .order-total { font-weight: 700; min-width: 70px; text-align: right; }
 
 .badge { padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
 .badge-placed { background: #fff3e6; color: #b5651d; }
 .badge-accepted { background: #e8f0ff; color: #2a5db0; }
+.badge-declined { background: #fde8e8; color: #c0392b; }
 .badge-ready { background: #e9f7ec; color: #2f7a3d; }
 .badge-completed { background: #eee; color: #555; }
 .badge-cancelled { background: #fde8e8; color: #c0392b; }
+.badge-soon { background: #fdeecb; color: #a15c00; margin-left: 6px; }
+
+.pickup-line { font-size: 1.05rem; margin-top: 14px; }
+
+.message-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.message {
+  max-width: 70%; padding: 10px 14px; border-radius: var(--radius);
+  background: var(--paper); border: 1px solid var(--border);
+}
+.message p { margin: 4px 0 0; }
+.message-mine { align-self: flex-end; background: #fff3e6; }
+.message-theirs { align-self: flex-start; }
 
 .flashes { margin-bottom: 20px; }
 .flash {

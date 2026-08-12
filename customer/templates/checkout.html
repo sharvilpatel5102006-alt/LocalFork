@@ -10,6 +10,16 @@
         <option value="delivery">Delivery</option>
       </select>
     </label>
+    <p class="muted small">Estimated time to make this order: about {{ prep_minutes }} minutes.</p>
+    <label>Pickup date
+      <input type="date" name="pickup_date"
+        min="{{ earliest.strftime('%Y-%m-%d') }}" max="{{ latest.strftime('%Y-%m-%d') }}"
+        value="{{ earliest.strftime('%Y-%m-%d') }}" required>
+    </label>
+    <label>Pickup time
+      <input type="time" name="pickup_time" value="{{ earliest.strftime('%H:%M') }}" required>
+    </label>
+    <p class="muted small">Choose any time from {{ earliest.strftime('%a %b %-d, %-I:%M %p') }} up to {{ MAX_ADVANCE_DAYS }} days out ({{ latest.strftime('%a %b %-d') }}).</p>
     <label>Notes for the cook (allergies, timing, etc.)
       <textarea name="notes" rows="3" placeholder="Optional"></textarea>
     </label>

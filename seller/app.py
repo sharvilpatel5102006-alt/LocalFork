@@ -8,6 +8,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_db, init_db  # noqa: E402
 from uploads import save_upload, delete_upload  # noqa: E402
+import scheduling  # noqa: E402
+from moderation import check_message  # noqa: E402
 
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -21,6 +23,7 @@ STATUS_FLOW = ["placed", "accepted", "ready", "completed"]
 STATUS_LABELS = {
     "placed": "Order placed",
     "accepted": "Accepted by cook",
+    "declined": "Declined by cook",
     "ready": "Ready",
     "completed": "Completed",
     "cancelled": "Cancelled",
@@ -31,8 +34,16 @@ def usd(cents):
     return f"${cents / 100:,.2f}"
 
 
+def format_pickup(value):
+    dt = scheduling.from_storage(value)
+    return dt.strftime("%a, %b %-d at %-I:%M %p") if dt else value
+
+
 app.jinja_env.filters["usd"] = usd
+app.jinja_env.filters["pickup"] = format_pickup
 app.jinja_env.globals["CUSTOMER_SITE_URL"] = CUSTOMER_SITE_URL
+app.jinja_env.globals["hours_until"] = scheduling.hours_until
+app.jinja_env.globals["is_due_soon"] = scheduling.is_due_soon
 
 
 @app.before_request
@@ -92,6 +103,7 @@ def signup():
         password = request.form.get("password", "")
         business_name = request.form.get("business_name", "").strip()
         city = request.form.get("city", "").strip()
+        address = request.form.get("address", "").strip()
         cuisine = request.form.get("cuisine", "").strip()
         bio = request.form.get("bio", "").strip()
         emoji = request.form.get("emoji", "🍽️").strip() or "🍽️"
@@ -112,8 +124,8 @@ def signup():
         )
         user_id = cur.lastrowid
         g.db.execute(
-            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user_id, business_name, bio, cuisine, city, emoji, photo_filename),
+            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, address, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (user_id, business_name, bio, cuisine, city, address, emoji, photo_filename),
         )
         g.db.commit()
         session["user_id"] = user_id
@@ -134,6 +146,7 @@ def become():
     if request.method == "POST":
         business_name = request.form.get("business_name", "").strip()
         city = request.form.get("city", "").strip()
+        address = request.form.get("address", "").strip()
         cuisine = request.form.get("cuisine", "").strip()
         bio = request.form.get("bio", "").strip()
         emoji = request.form.get("emoji", "🍽️").strip() or "🍽️"
@@ -142,8 +155,8 @@ def become():
             return render_template("become.html", form=request.form)
         photo_filename = save_upload(request.files.get("photo"))
         g.db.execute(
-            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (g.user["id"], business_name, bio, cuisine, city, emoji, photo_filename),
+            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, address, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (g.user["id"], business_name, bio, cuisine, city, address, emoji, photo_filename),
         )
         g.db.commit()
         flash("Your seller page is live! Add some menu items to get started.")
@@ -209,6 +222,7 @@ def business_edit():
     if request.method == "POST":
         business_name = request.form.get("business_name", "").strip()
         city = request.form.get("city", "").strip()
+        address = request.form.get("address", "").strip()
         cuisine = request.form.get("cuisine", "").strip()
         bio = request.form.get("bio", "").strip()
         emoji = request.form.get("emoji", "🍽️").strip() or "🍽️"
@@ -224,8 +238,8 @@ def business_edit():
             delete_upload(photo_filename)
             photo_filename = new_photo
         g.db.execute(
-            "UPDATE seller_profiles SET business_name=?, city=?, cuisine=?, bio=?, emoji=?, photo_filename=? WHERE id=?",
-            (business_name, city, cuisine, bio, emoji, photo_filename, g.seller["id"]),
+            "UPDATE seller_profiles SET business_name=?, city=?, address=?, cuisine=?, bio=?, emoji=?, photo_filename=? WHERE id=?",
+            (business_name, city, address, cuisine, bio, emoji, photo_filename, g.seller["id"]),
         )
         g.db.commit()
         flash("Business page updated.")
@@ -244,10 +258,20 @@ def dashboard():
     orders = g.db.execute(
         """SELECT o.*, u.name AS buyer_name FROM orders o
            JOIN users u ON u.id = o.buyer_id
-           WHERE o.seller_id = ? ORDER BY o.created_at DESC""",
+           WHERE o.seller_id = ? AND o.status NOT IN ('completed', 'cancelled', 'declined')
+           ORDER BY o.pickup_at ASC""",
         (g.seller["id"],),
     ).fetchall()
-    return render_template("dashboard.html", items=items, orders=orders, status_labels=STATUS_LABELS)
+    past_orders = g.db.execute(
+        """SELECT o.*, u.name AS buyer_name FROM orders o
+           JOIN users u ON u.id = o.buyer_id
+           WHERE o.seller_id = ? AND o.status IN ('completed', 'cancelled', 'declined')
+           ORDER BY o.created_at DESC LIMIT 20""",
+        (g.seller["id"],),
+    ).fetchall()
+    return render_template(
+        "dashboard.html", items=items, orders=orders, past_orders=past_orders, status_labels=STATUS_LABELS
+    )
 
 
 @app.route("/menu/new", methods=["GET", "POST"])
@@ -262,13 +286,17 @@ def menu_new():
             price_cents = int(round(float(price) * 100))
         except ValueError:
             price_cents = -1
+        try:
+            prep_minutes = max(1, int(request.form.get("prep_minutes", 15)))
+        except ValueError:
+            prep_minutes = 15
         if not name or price_cents <= 0:
             flash("Please provide a dish name and a valid price.")
             return render_template("menu_form.html", form=request.form, mode="new")
         photo_filename = save_upload(request.files.get("photo"))
         g.db.execute(
-            "INSERT INTO menu_items (seller_id, name, description, price_cents, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?)",
-            (g.seller["id"], name, description, price_cents, emoji, photo_filename),
+            "INSERT INTO menu_items (seller_id, name, description, price_cents, prep_minutes, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (g.seller["id"], name, description, price_cents, prep_minutes, emoji, photo_filename),
         )
         g.db.commit()
         flash(f"Added {name} to your menu.")
@@ -293,6 +321,10 @@ def menu_edit(item_id):
             price_cents = int(round(float(price) * 100))
         except ValueError:
             price_cents = -1
+        try:
+            prep_minutes = max(1, int(request.form.get("prep_minutes", 15)))
+        except ValueError:
+            prep_minutes = 15
         if not name or price_cents <= 0:
             flash("Please provide a dish name and a valid price.")
             return render_template("menu_form.html", form=request.form, mode="edit", item=item)
@@ -305,8 +337,8 @@ def menu_edit(item_id):
             delete_upload(photo_filename)
             photo_filename = new_photo
         g.db.execute(
-            "UPDATE menu_items SET name=?, description=?, price_cents=?, emoji=?, photo_filename=? WHERE id=?",
-            (name, description, price_cents, emoji, photo_filename, item_id),
+            "UPDATE menu_items SET name=?, description=?, price_cents=?, prep_minutes=?, emoji=?, photo_filename=? WHERE id=?",
+            (name, description, price_cents, prep_minutes, emoji, photo_filename, item_id),
         )
         g.db.commit()
         flash("Menu item updated.")
@@ -343,9 +375,7 @@ def menu_delete(item_id):
     return redirect(url_for("dashboard"))
 
 
-@app.route("/orders/<int:order_id>")
-@seller_required
-def order_detail(order_id):
+def _get_own_seller_order(order_id):
     order = g.db.execute(
         """SELECT o.*, u.name AS buyer_name FROM orders o
            JOIN users u ON u.id = o.buyer_id WHERE o.id = ? AND o.seller_id = ?""",
@@ -353,24 +383,56 @@ def order_detail(order_id):
     ).fetchone()
     if not order:
         abort(404)
+    return order
+
+
+@app.route("/orders/<int:order_id>")
+@seller_required
+def order_detail(order_id):
+    order = _get_own_seller_order(order_id)
     items = g.db.execute("SELECT * FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
+    messages = g.db.execute(
+        "SELECT * FROM messages WHERE order_id = ? ORDER BY created_at", (order_id,)
+    ).fetchall()
     return render_template(
-        "order_detail.html", order=order, items=items, status_flow=STATUS_FLOW, status_labels=STATUS_LABELS
+        "order_detail.html", order=order, items=items, status_flow=STATUS_FLOW,
+        status_labels=STATUS_LABELS, messages=messages,
     )
 
 
 @app.route("/orders/<int:order_id>/status", methods=["POST"])
 @seller_required
 def order_status(order_id):
-    order = g.db.execute(
-        "SELECT * FROM orders WHERE id = ? AND seller_id = ?", (order_id, g.seller["id"])
-    ).fetchone()
-    if not order:
-        abort(404)
+    order = _get_own_seller_order(order_id)
     new_status = request.form.get("status")
     if new_status not in STATUS_LABELS:
         abort(400)
     g.db.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
+    g.db.commit()
+    return redirect(request.referrer or url_for("order_detail", order_id=order_id))
+
+
+@app.route("/orders/<int:order_id>/messages", methods=["POST"])
+@seller_required
+def order_message(order_id):
+    order = _get_own_seller_order(order_id)
+    body = request.form.get("body", "").strip()
+    if not body:
+        return redirect(url_for("order_detail", order_id=order_id))
+    clean, matched = check_message(body)
+    if not clean:
+        g.db.execute(
+            "INSERT INTO flagged_messages (order_id, sender_user_id, body, matched_word) VALUES (?, ?, ?, ?)",
+            (order_id, g.user["id"], body, matched),
+        )
+        g.db.commit()
+        app.logger.warning(f"Blocked message on order {order_id} from user {g.user['id']}: matched '{matched}'")
+        flash("Your message wasn't sent — it contains language that isn't allowed here.")
+        return redirect(url_for("order_detail", order_id=order_id))
+    g.db.execute(
+        "INSERT INTO messages (order_id, sender_role, sender_user_id, body) VALUES (?, 'seller', ?, ?)",
+        (order_id, g.user["id"], body),
+    )
     g.db.commit()
     return redirect(url_for("order_detail", order_id=order_id))
 

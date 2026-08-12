@@ -5,6 +5,14 @@
   <p class="muted">{{ order['business_name'] }} · {{ order['fulfillment'] }} · placed {{ order['created_at'] }}</p>
   <span class="badge badge-{{ order['status'] }}">{{ status_labels[order['status']] }}</span>
 
+  <p class="pickup-line">
+    <strong>{{ 'Pickup' if order['fulfillment'] == 'pickup' else 'Delivery' }}:</strong>
+    {{ order['pickup_at']|pickup }}
+  </p>
+  {% if order['fulfillment'] == 'pickup' and order['seller_address'] %}
+    <p class="muted">Pickup location: {{ order['seller_address'] }}</p>
+  {% endif %}
+
   <div class="menu-list">
     {% for item in items %}
       <div class="menu-item">
@@ -17,4 +25,39 @@
   </div>
   <div class="cart-total">Total: <strong>{{ order['total_cents']|usd }}</strong></div>
   {% if order['notes'] %}<p><strong>Notes:</strong> {{ order['notes'] }}</p>{% endif %}
+  {% if order['late_cancellation'] %}
+    <p class="banner">This order was cancelled within {{ 24 }} hours of pickup — the full amount ({{ order['total_cents']|usd }}) applies as a late-cancellation fee per policy.</p>
+  {% endif %}
+
+  {% if cancel_status %}
+    <h2 class="section-title">Cancel this order</h2>
+    {% if cancel_status == 'blocked' %}
+      <p class="muted">This order is due too soon to cancel (less than 15 minutes before pickup).</p>
+    {% else %}
+      <form method="post" action="{{ url_for('order_cancel', order_id=order['id']) }}" onsubmit="return confirm('Cancel this order?');">
+        {% if cancel_status == 'fee' %}
+          <p class="muted small">This is within 24 hours of pickup — cancelling now means the full order amount applies as a late-cancellation fee.</p>
+        {% else %}
+          <p class="muted small">This is more than 24 hours before pickup, so you can cancel free of charge.</p>
+        {% endif %}
+        <button type="submit" class="btn-ghost danger">Cancel order</button>
+      </form>
+    {% endif %}
+  {% endif %}
+
+  <h2 class="section-title">Messages with {{ order['business_name'] }}</h2>
+  <div class="message-thread">
+    {% for m in messages %}
+      <div class="message {{ 'message-mine' if m['sender_role'] == 'buyer' else 'message-theirs' }}">
+        <span class="muted small">{{ 'You' if m['sender_role'] == 'buyer' else order['business_name'] }} · {{ m['created_at'] }}</span>
+        <p>{{ m['body'] }}</p>
+      </div>
+    {% else %}
+      <p class="empty">No messages yet.</p>
+    {% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('order_message', order_id=order['id']) }}" class="form narrow">
+    <textarea name="body" rows="2" placeholder="Message the cook about this order…" required></textarea>
+    <button type="submit" class="btn-small">Send</button>
+  </form>
 {% endblock %}

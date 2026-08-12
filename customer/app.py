@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, abort
@@ -8,6 +9,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_db, init_db  # noqa: E402
 from uploads import save_upload, delete_upload  # noqa: E402
+import scheduling  # noqa: E402
+from moderation import check_message  # noqa: E402
 
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -20,6 +23,7 @@ SELLER_PORTAL_URL = os.environ.get("SELLER_PORTAL_URL", "http://localhost:5051")
 STATUS_LABELS = {
     "placed": "Order placed",
     "accepted": "Accepted by cook",
+    "declined": "Declined by cook",
     "ready": "Ready",
     "completed": "Completed",
     "cancelled": "Cancelled",
@@ -30,8 +34,17 @@ def usd(cents):
     return f"${cents / 100:,.2f}"
 
 
+def format_pickup(value):
+    dt = scheduling.from_storage(value)
+    return dt.strftime("%a, %b %-d at %-I:%M %p") if dt else value
+
+
 app.jinja_env.filters["usd"] = usd
+app.jinja_env.filters["pickup"] = format_pickup
 app.jinja_env.globals["SELLER_PORTAL_URL"] = SELLER_PORTAL_URL
+app.jinja_env.globals["hours_until"] = scheduling.hours_until
+app.jinja_env.globals["is_due_soon"] = scheduling.is_due_soon
+app.jinja_env.globals["MAX_ADVANCE_DAYS"] = scheduling.MAX_ADVANCE_DAYS
 
 
 @app.before_request
@@ -266,12 +279,25 @@ def checkout():
     rows_by_id = {str(r["id"]): r for r in rows}
     total = sum(rows_by_id[i]["price_cents"] * q for i, q in cart["items"].items() if i in rows_by_id)
 
+    prep_minutes = scheduling.median_prep_minutes([rows_by_id[i]["prep_minutes"] for i in cart["items"] if i in rows_by_id])
+    earliest, latest = scheduling.pickup_bounds(prep_minutes)
+
     if request.method == "POST":
         fulfillment = request.form.get("fulfillment", "pickup")
         notes = request.form.get("notes", "").strip()
+        pickup_dt = scheduling.parse_pickup(request.form.get("pickup_date", ""), request.form.get("pickup_time", ""))
+        if not pickup_dt or not (earliest <= pickup_dt <= latest):
+            flash(f"Please choose a pickup time between now and {scheduling.MAX_ADVANCE_DAYS} days from now, "
+                  f"allowing at least {prep_minutes} minutes for the order to be made.")
+            seller = g.db.execute("SELECT * FROM seller_profiles WHERE id = ?", (cart["seller_id"],)).fetchone()
+            return render_template(
+                "checkout.html", total=total, seller=seller, prep_minutes=prep_minutes,
+                earliest=earliest, latest=latest,
+            )
         cur = g.db.execute(
-            "INSERT INTO orders (buyer_id, seller_id, status, fulfillment, notes, total_cents) VALUES (?, ?, 'placed', ?, ?, ?)",
-            (g.user["id"], cart["seller_id"], fulfillment, notes, total),
+            """INSERT INTO orders (buyer_id, seller_id, status, fulfillment, notes, total_cents, pickup_at, estimated_prep_minutes)
+               VALUES (?, ?, 'placed', ?, ?, ?, ?, ?)""",
+            (g.user["id"], cart["seller_id"], fulfillment, notes, total, scheduling.to_storage(pickup_dt), prep_minutes),
         )
         order_id = cur.lastrowid
         for item_id, qty in cart["items"].items():
@@ -288,7 +314,10 @@ def checkout():
         return redirect(url_for("order_detail", order_id=order_id))
 
     seller = g.db.execute("SELECT * FROM seller_profiles WHERE id = ?", (cart["seller_id"],)).fetchone()
-    return render_template("checkout.html", total=total, seller=seller)
+    return render_template(
+        "checkout.html", total=total, seller=seller, prep_minutes=prep_minutes,
+        earliest=earliest, latest=latest,
+    )
 
 
 @app.route("/orders")
@@ -303,11 +332,9 @@ def my_orders():
     return render_template("orders.html", orders=orders, status_labels=STATUS_LABELS)
 
 
-@app.route("/order/<int:order_id>")
-@login_required
-def order_detail(order_id):
+def _get_own_order(order_id):
     order = g.db.execute(
-        """SELECT o.*, sp.business_name FROM orders o
+        """SELECT o.*, sp.business_name, sp.address AS seller_address FROM orders o
            JOIN seller_profiles sp ON sp.id = o.seller_id WHERE o.id = ?""",
         (order_id,),
     ).fetchone()
@@ -315,8 +342,69 @@ def order_detail(order_id):
         abort(404)
     if order["buyer_id"] != g.user["id"]:
         abort(403)
+    return order
+
+
+@app.route("/order/<int:order_id>")
+@login_required
+def order_detail(order_id):
+    order = _get_own_order(order_id)
     items = g.db.execute("SELECT * FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
-    return render_template("order_detail.html", order=order, items=items, status_labels=STATUS_LABELS)
+    messages = g.db.execute(
+        "SELECT * FROM messages WHERE order_id = ? ORDER BY created_at", (order_id,)
+    ).fetchall()
+    cancel_status = scheduling.cancellation_status(order["pickup_at"]) if order["status"] in ("placed", "accepted") else None
+    return render_template(
+        "order_detail.html", order=order, items=items, status_labels=STATUS_LABELS,
+        messages=messages, cancel_status=cancel_status,
+    )
+
+
+@app.route("/order/<int:order_id>/cancel", methods=["POST"])
+@login_required
+def order_cancel(order_id):
+    order = _get_own_order(order_id)
+    if order["status"] not in ("placed", "accepted"):
+        flash("This order can no longer be cancelled.")
+        return redirect(url_for("order_detail", order_id=order_id))
+    status = scheduling.cancellation_status(order["pickup_at"])
+    if status == "blocked":
+        flash(f"This order can't be cancelled — it's due for pickup in less than {scheduling.BLOCK_CUTOFF_MINUTES} minutes.")
+        return redirect(url_for("order_detail", order_id=order_id))
+    late = 1 if status == "fee" else 0
+    g.db.execute("UPDATE orders SET status = 'cancelled', late_cancellation = ? WHERE id = ?", (late, order_id))
+    g.db.commit()
+    if late:
+        flash(f"Order cancelled. Since this was within {scheduling.FEE_CUTOFF_HOURS} hours of pickup, "
+              f"the full order amount ({usd(order['total_cents'])}) applies as a late-cancellation fee per policy.")
+    else:
+        flash("Order cancelled — no fee, since it was cancelled well ahead of pickup.")
+    return redirect(url_for("order_detail", order_id=order_id))
+
+
+@app.route("/order/<int:order_id>/messages", methods=["POST"])
+@login_required
+def order_message(order_id):
+    order = _get_own_order(order_id)
+    body = request.form.get("body", "").strip()
+    if not body:
+        return redirect(url_for("order_detail", order_id=order_id))
+    clean, matched = check_message(body)
+    if not clean:
+        g.db.execute(
+            "INSERT INTO flagged_messages (order_id, sender_user_id, body, matched_word) VALUES (?, ?, ?, ?)",
+            (order_id, g.user["id"], body, matched),
+        )
+        g.db.commit()
+        app.logger.warning(f"Blocked message on order {order_id} from user {g.user['id']}: matched '{matched}'")
+        flash("Your message wasn't sent — it contains language that isn't allowed here.")
+        return redirect(url_for("order_detail", order_id=order_id))
+    g.db.execute(
+        "INSERT INTO messages (order_id, sender_role, sender_user_id, body) VALUES (?, 'buyer', ?, ?)",
+        (order_id, g.user["id"], body),
+    )
+    g.db.commit()
+    return redirect(url_for("order_detail", order_id=order_id))
 
 
 if __name__ == "__main__":

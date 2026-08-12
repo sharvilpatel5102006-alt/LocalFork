@@ -2,13 +2,26 @@
 {% block title %}My orders{% endblock %}
 {% block content %}
   <h1>My orders</h1>
+
+  {% for o in orders %}
+    {% if o['status'] in ('placed', 'accepted') and is_due_soon(o['pickup_at']) %}
+      <div class="banner">
+        Reminder: your order from <strong>{{ o['business_name'] }}</strong> is due for pickup
+        {{ o['pickup_at']|pickup }} — less than a day away.
+      </div>
+    {% endif %}
+  {% endfor %}
+
   {% if orders %}
     <div class="order-list">
       {% for o in orders %}
         <a class="order-row" href="{{ url_for('order_detail', order_id=o['id']) }}">
           <div>
             <strong>{{ o['business_name'] }}</strong>
-            <p class="muted small">{{ o['created_at'] }} · {{ o['fulfillment'] }}</p>
+            <p class="muted small">
+              Pickup {{ o['pickup_at']|pickup }} · {{ o['fulfillment'] }}
+              {% if is_due_soon(o['pickup_at']) %}<span class="badge badge-soon">Due soon</span>{% endif %}
+            </p>
           </div>
           <span class="badge badge-{{ o['status'] }}">{{ status_labels[o['status']] }}</span>
           <div class="order-total">{{ o['total_cents']|usd }}</div>

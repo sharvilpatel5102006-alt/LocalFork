@@ -5,6 +5,13 @@
   <p class="muted">From {{ order['buyer_name'] }} · {{ order['fulfillment'] }} · placed {{ order['created_at'] }}</p>
   <span class="badge badge-{{ order['status'] }}">{{ status_labels[order['status']] }}</span>
 
+  <p class="pickup-line">
+    <strong>{{ 'Pickup' if order['fulfillment'] == 'pickup' else 'Delivery' }}:</strong>
+    {{ order['pickup_at']|pickup }}
+    {% if is_due_soon(order['pickup_at']) %}<span class="badge badge-soon">Due soon</span>{% endif %}
+  </p>
+  <p class="muted small">Estimated prep time when ordered: about {{ order['estimated_prep_minutes'] }} minutes.</p>
+
   <div class="menu-list">
     {% for item in items %}
       <div class="menu-item">
@@ -17,6 +24,22 @@
   </div>
   <div class="cart-total">Total: <strong>{{ order['total_cents']|usd }}</strong></div>
   {% if order['notes'] %}<p><strong>Notes:</strong> {{ order['notes'] }}</p>{% endif %}
+  {% if order['late_cancellation'] %}
+    <p class="banner">The customer cancelled this within 24 hours of pickup — the full amount applies as a late-cancellation fee per policy.</p>
+  {% endif %}
+
+  {% if order['status'] == 'placed' %}
+    <div class="actions">
+      <form method="post" action="{{ url_for('order_status', order_id=order['id']) }}">
+        <input type="hidden" name="status" value="accepted">
+        <button type="submit" class="btn">Accept order</button>
+      </form>
+      <form method="post" action="{{ url_for('order_status', order_id=order['id']) }}">
+        <input type="hidden" name="status" value="declined">
+        <button type="submit" class="btn-ghost danger">Decline order</button>
+      </form>
+    </div>
+  {% endif %}
 
   <h2 class="section-title">Update status</h2>
   <form method="post" action="{{ url_for('order_status', order_id=order['id']) }}" class="status-form">
@@ -24,8 +47,25 @@
       {% for s in status_flow %}
         <option value="{{ s }}" {% if s == order['status'] %}selected{% endif %}>{{ status_labels[s] }}</option>
       {% endfor %}
+      <option value="declined" {% if order['status'] == 'declined' %}selected{% endif %}>{{ status_labels['declined'] }}</option>
       <option value="cancelled" {% if order['status'] == 'cancelled' %}selected{% endif %}>Cancelled</option>
     </select>
     <button type="submit" class="btn-small">Update</button>
+  </form>
+
+  <h2 class="section-title">Messages with {{ order['buyer_name'] }}</h2>
+  <div class="message-thread">
+    {% for m in messages %}
+      <div class="message {{ 'message-mine' if m['sender_role'] == 'seller' else 'message-theirs' }}">
+        <span class="muted small">{{ 'You' if m['sender_role'] == 'seller' else order['buyer_name'] }} · {{ m['created_at'] }}</span>
+        <p>{{ m['body'] }}</p>
+      </div>
+    {% else %}
+      <p class="empty">No messages yet.</p>
+    {% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('order_message', order_id=order['id']) }}" class="form narrow">
+    <textarea name="body" rows="2" placeholder="Message the customer about this order…" required></textarea>
+    <button type="submit" class="btn-small">Send</button>
   </form>
 {% endblock %}
