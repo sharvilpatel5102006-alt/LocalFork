@@ -7,9 +7,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_db, init_db  # noqa: E402
+from uploads import save_upload, delete_upload  # noqa: E402
 
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB per upload
 
 # Where the customer-facing site lives. In production this becomes something like
 # https://localfork.com — set the CUSTOMER_SITE_URL env var to point there.
@@ -102,14 +104,16 @@ def signup():
             flash("An account with that email already exists — log in instead.")
             return render_template("signup.html", form=request.form)
 
+        photo_filename = save_upload(request.files.get("photo"))
+
         cur = g.db.execute(
             "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
             (name, email, generate_password_hash(password, method="pbkdf2:sha256")),
         )
         user_id = cur.lastrowid
         g.db.execute(
-            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, business_name, bio, cuisine, city, emoji),
+            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, business_name, bio, cuisine, city, emoji, photo_filename),
         )
         g.db.commit()
         session["user_id"] = user_id
@@ -136,9 +140,10 @@ def become():
         if not business_name or not city:
             flash("Business name and city are required.")
             return render_template("become.html", form=request.form)
+        photo_filename = save_upload(request.files.get("photo"))
         g.db.execute(
-            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji) VALUES (?, ?, ?, ?, ?, ?)",
-            (g.user["id"], business_name, bio, cuisine, city, emoji),
+            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (g.user["id"], business_name, bio, cuisine, city, emoji, photo_filename),
         )
         g.db.commit()
         flash("Your seller page is live! Add some menu items to get started.")
@@ -164,11 +169,68 @@ def login():
     return render_template("login.html", email="")
 
 
+@app.route("/account", methods=["GET", "POST"])
+def account():
+    if not g.user:
+        flash("Please log in first.")
+        return redirect(url_for("login", next=request.path))
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if not name:
+            flash("Name can't be empty.")
+            return render_template("account.html")
+        new_photo = save_upload(request.files.get("photo"))
+        photo_filename = g.user["photo_filename"]
+        if request.form.get("remove_photo") == "1":
+            delete_upload(photo_filename)
+            photo_filename = None
+        if new_photo:
+            delete_upload(photo_filename)
+            photo_filename = new_photo
+        g.db.execute(
+            "UPDATE users SET name=?, photo_filename=? WHERE id=?", (name, photo_filename, g.user["id"])
+        )
+        g.db.commit()
+        flash("Profile updated.")
+        return redirect(url_for("account"))
+    return render_template("account.html")
+
+
 @app.route("/logout")
 def logout():
     session.clear()
     flash("Logged out.")
     return redirect(url_for("login"))
+
+
+@app.route("/business/edit", methods=["GET", "POST"])
+@seller_required
+def business_edit():
+    if request.method == "POST":
+        business_name = request.form.get("business_name", "").strip()
+        city = request.form.get("city", "").strip()
+        cuisine = request.form.get("cuisine", "").strip()
+        bio = request.form.get("bio", "").strip()
+        emoji = request.form.get("emoji", "🍽️").strip() or "🍽️"
+        if not business_name or not city:
+            flash("Business name and city are required.")
+            return render_template("business_form.html", form=request.form)
+        new_photo = save_upload(request.files.get("photo"))
+        photo_filename = g.seller["photo_filename"]
+        if request.form.get("remove_photo") == "1":
+            delete_upload(photo_filename)
+            photo_filename = None
+        if new_photo:
+            delete_upload(photo_filename)
+            photo_filename = new_photo
+        g.db.execute(
+            "UPDATE seller_profiles SET business_name=?, city=?, cuisine=?, bio=?, emoji=?, photo_filename=? WHERE id=?",
+            (business_name, city, cuisine, bio, emoji, photo_filename, g.seller["id"]),
+        )
+        g.db.commit()
+        flash("Business page updated.")
+        return redirect(url_for("dashboard"))
+    return render_template("business_form.html", form=dict(g.seller))
 
 
 # ---------- Dashboard ----------
@@ -203,9 +265,10 @@ def menu_new():
         if not name or price_cents <= 0:
             flash("Please provide a dish name and a valid price.")
             return render_template("menu_form.html", form=request.form, mode="new")
+        photo_filename = save_upload(request.files.get("photo"))
         g.db.execute(
-            "INSERT INTO menu_items (seller_id, name, description, price_cents, emoji) VALUES (?, ?, ?, ?, ?)",
-            (g.seller["id"], name, description, price_cents, emoji),
+            "INSERT INTO menu_items (seller_id, name, description, price_cents, emoji, photo_filename) VALUES (?, ?, ?, ?, ?, ?)",
+            (g.seller["id"], name, description, price_cents, emoji, photo_filename),
         )
         g.db.commit()
         flash(f"Added {name} to your menu.")
@@ -233,9 +296,17 @@ def menu_edit(item_id):
         if not name or price_cents <= 0:
             flash("Please provide a dish name and a valid price.")
             return render_template("menu_form.html", form=request.form, mode="edit", item=item)
+        new_photo = save_upload(request.files.get("photo"))
+        photo_filename = item["photo_filename"]
+        if request.form.get("remove_photo") == "1":
+            delete_upload(photo_filename)
+            photo_filename = None
+        if new_photo:
+            delete_upload(photo_filename)
+            photo_filename = new_photo
         g.db.execute(
-            "UPDATE menu_items SET name=?, description=?, price_cents=?, emoji=? WHERE id=?",
-            (name, description, price_cents, emoji, item_id),
+            "UPDATE menu_items SET name=?, description=?, price_cents=?, emoji=?, photo_filename=? WHERE id=?",
+            (name, description, price_cents, emoji, photo_filename, item_id),
         )
         g.db.commit()
         flash("Menu item updated.")
@@ -261,6 +332,11 @@ def menu_toggle(item_id):
 @app.route("/menu/<int:item_id>/delete", methods=["POST"])
 @seller_required
 def menu_delete(item_id):
+    item = g.db.execute(
+        "SELECT * FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"])
+    ).fetchone()
+    if item:
+        delete_upload(item["photo_filename"])
     g.db.execute("DELETE FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"]))
     g.db.commit()
     flash("Menu item removed.")

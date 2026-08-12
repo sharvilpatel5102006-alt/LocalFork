@@ -7,7 +7,11 @@
     <div class="cart-lines">
       {% for line in lines %}
         <div class="cart-line">
-          <div class="menu-emoji">{{ line['item']['emoji'] }}</div>
+          {% if line['item']['photo_filename'] %}
+            <img class="menu-photo" src="{{ url_for('static', filename='uploads/' + line['item']['photo_filename']) }}" alt="">
+          {% else %}
+            <div class="menu-emoji">{{ line['item']['emoji'] }}</div>
+          {% endif %}
           <div class="menu-info">
             <h3>{{ line['item']['name'] }}</h3>
             <p class="muted">{{ line['item']['price_cents']|usd }} each</p>

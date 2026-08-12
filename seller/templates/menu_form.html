@@ -2,12 +2,25 @@
 {% block title %}{{ 'Edit dish' if mode == 'edit' else 'Add a dish' }}{% endblock %}
 {% block content %}
   <h1>{{ 'Edit dish' if mode == 'edit' else 'Add a dish' }}</h1>
-  <form method="post" class="form narrow">
+  <form method="post" enctype="multipart/form-data" class="form narrow">
+    <div class="photo-field">
+      {% if form.get('photo_filename') %}
+        <img class="menu-photo" style="width:64px;height:64px;" src="{{ url_for('static', filename='uploads/' + form.get('photo_filename')) }}" alt="">
+      {% else %}
+        <span class="menu-emoji">{{ form.get('emoji','🍲') }}</span>
+      {% endif %}
+      <div>
+        <input type="file" name="photo" accept="image/*">
+        {% if form.get('photo_filename') %}
+          <label class="muted small"><input type="checkbox" name="remove_photo" value="1"> Remove current photo</label>
+        {% endif %}
+      </div>
+    </div>
     <label>Name <input type="text" name="name" value="{{ form.get('name','') }}" required></label>
     <label>Description <textarea name="description" rows="3">{{ form.get('description','') }}</textarea></label>
     <label>Price (USD) <input type="number" step="0.01" min="0.01" name="price"
       value="{{ '%.2f'|format(form.get('price_cents', 0) / 100) if form.get('price_cents') else form.get('price','') }}" required></label>
-    <label>Emoji <input type="text" name="emoji" value="{{ form.get('emoji','🍲') }}" maxlength="4"></label>
+    <label>Emoji (used if no photo is set) <input type="text" name="emoji" value="{{ form.get('emoji','🍲') }}" maxlength="4"></label>
     <button type="submit" class="btn">{{ 'Save changes' if mode == 'edit' else 'Add dish' }}</button>
   </form>
 {% endblock %}

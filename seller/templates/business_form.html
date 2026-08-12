@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Edit business page{% endblock %}
+{% block content %}
+  <h1>Edit your business page</h1>
+  <form method="post" enctype="multipart/form-data" class="form narrow">
+    <div class="photo-field">
+      {% if form.get('photo_filename') %}
+        <img class="seller-photo" src="{{ url_for('static', filename='uploads/' + form.get('photo_filename')) }}" alt="">
+      {% else %}
+        <span class="seller-emoji" style="font-size:2.2rem;padding:10px 14px;">{{ form.get('emoji','🍽️') }}</span>
+      {% endif %}
+      <div>
+        <input type="file" name="photo" accept="image/*">
+        {% if form.get('photo_filename') %}
+          <label class="muted small"><input type="checkbox" name="remove_photo" value="1"> Remove current photo</label>
+        {% endif %}
+      </div>
+    </div>
+    <label>Business or cook name <input type="text" name="business_name" value="{{ form.get('business_name','') }}" required></label>
+    <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>
+    <label>Cuisine / specialty <input type="text" name="cuisine" value="{{ form.get('cuisine','') }}"></label>
+    <label>Short bio <textarea name="bio" rows="3">{{ form.get('bio','') }}</textarea></label>
+    <label>Emoji (used if no photo is set) <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
+    <button type="submit" class="btn">Save changes</button>
+  </form>
+{% endblock %}

@@ -2,7 +2,11 @@
 {% block title %}{{ seller['business_name'] }}{% endblock %}
 {% block content %}
   <section class="seller-header">
-    <div class="seller-emoji">{{ seller['emoji'] }}</div>
+    {% if seller['photo_filename'] %}
+      <img class="seller-photo" src="{{ url_for('static', filename='uploads/' + seller['photo_filename']) }}" alt="">
+    {% else %}
+      <div class="seller-emoji">{{ seller['emoji'] }}</div>
+    {% endif %}
     <div>
       <h1>{{ seller['business_name'] }}</h1>
       <p class="muted">{{ seller['cuisine'] or 'Home cooking' }} · {{ seller['city'] }} · by {{ seller['owner_name'] }}</p>
@@ -15,7 +19,11 @@
     <div class="menu-list">
       {% for item in items %}
         <div class="menu-item">
-          <div class="menu-emoji">{{ item['emoji'] }}</div>
+          {% if item['photo_filename'] %}
+            <img class="menu-photo" src="{{ url_for('static', filename='uploads/' + item['photo_filename']) }}" alt="">
+          {% else %}
+            <div class="menu-emoji">{{ item['emoji'] }}</div>
+          {% endif %}
           <div class="menu-info">
             <h3>{{ item['name'] }}</h3>
             {% if item['description'] %}<p class="muted">{{ item['description'] }}</p>{% endif %}

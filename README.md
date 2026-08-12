@@ -25,10 +25,14 @@ They're separate Flask apps, on separate ports, with separate templates — but 
 
 **Seller portal:**
 - Dedicated signup (creates account + business profile together) or "add a seller profile" for an existing account
-- Dashboard: add/edit/hide/delete menu items
+- Dashboard: add/edit/hide/delete menu items, with a photo per dish
+- Business page photo (shown on the browse grid and seller page instead of the emoji, once uploaded)
 - Incoming orders with status updates (placed → accepted → ready → completed)
 
-Payment today is "pay the cook directly at pickup/delivery" — no card processing yet. See "Going live" below.
+**Both sites:**
+- `/account` — anyone can set their display name and upload a profile photo; it shows up as a small avatar in the nav on both sites (falls back to an initial-letter circle if no photo is set)
+
+Uploaded photos (dish, business, profile) are stored in `static/uploads/` and shared between both apps automatically, since they read the same folder. Payment today is "pay the cook directly at pickup/delivery" — no card processing yet. See "Going live" below.
 
 ## Running it on your computer
 
@@ -59,6 +63,8 @@ python3 -c "from db import init_db; init_db()"
 python3 seed.py
 ```
 
+**If `python3` says "You have not agreed to the Xcode license agreements":** this is a one-time macOS thing, unrelated to this app. Run `sudo xcodebuild -license` in Terminal, accept it, and `python3` will work normally again.
+
 ## Project layout
 
 ```
@@ -72,6 +78,8 @@ seller/
 static/
   style.css                  – shared design system
   seller.css                 – seller-portal-only accents (dark header, etc.)
+  uploads/                   – uploaded photos land here (not in git)
+uploads.py                   – shared photo upload/delete helper
 instance/                    – the database file lives here (not in git)
 ```
 

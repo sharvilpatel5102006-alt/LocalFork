@@ -17,7 +17,14 @@
         {% endif %}
         <a href="{{ CUSTOMER_SITE_URL }}">View customer site ↗</a>
         {% if g.user %}
-          <span class="who">Hi, {{ g.user['name'] }}</span>
+          <a class="who" href="{{ url_for('account') }}">
+            {% if g.user['photo_filename'] %}
+              <img class="avatar avatar-sm" src="{{ url_for('static', filename='uploads/' + g.user['photo_filename']) }}" alt="">
+            {% else %}
+              <span class="avatar avatar-sm">{{ g.user['name'][0]|upper }}</span>
+            {% endif %}
+            Hi, {{ g.user['name'] }}
+          </a>
           <a href="{{ url_for('logout') }}">Log out</a>
         {% else %}
           <a href="{{ url_for('login') }}">Log in</a>

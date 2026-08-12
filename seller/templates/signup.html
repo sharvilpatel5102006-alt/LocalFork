@@ -3,7 +3,7 @@
 {% block content %}
   <h1>Start selling on LocalFork</h1>
   <p class="muted">Set up your account and your seller page in one go.</p>
-  <form method="post" class="form">
+  <form method="post" enctype="multipart/form-data" class="form">
     <label>Your name <input type="text" name="name" value="{{ form.get('name','') }}" required></label>
     <label>Email <input type="email" name="email" value="{{ form.get('email','') }}" required></label>
     <label>Password <input type="password" name="password" required minlength="6"></label>
@@ -14,7 +14,8 @@
     <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>
     <label>Cuisine / specialty <input type="text" name="cuisine" value="{{ form.get('cuisine','') }}" placeholder="e.g. Homestyle Mexican"></label>
     <label>Short bio <textarea name="bio" rows="3">{{ form.get('bio','') }}</textarea></label>
-    <label>Pick an emoji for your page <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
+    <label>Business photo (optional) <input type="file" name="photo" accept="image/*"></label>
+    <label>Emoji (used if no photo is set) <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
 
     <button type="submit" class="btn">Create my seller page</button>
   </form>

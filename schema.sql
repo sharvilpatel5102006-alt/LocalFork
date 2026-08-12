@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
+    photo_filename TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
     cuisine TEXT NOT NULL DEFAULT '',
     city TEXT NOT NULL,
     emoji TEXT NOT NULL DEFAULT '🍽️',
+    photo_filename TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
     description TEXT NOT NULL DEFAULT '',
     price_cents INTEGER NOT NULL,
     emoji TEXT NOT NULL DEFAULT '🍲',
+    photo_filename TEXT,
     is_available INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
 );

@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
 instance/
+static/uploads/
 .DS_Store
 venv/

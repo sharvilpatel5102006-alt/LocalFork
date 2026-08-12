@@ -20,7 +20,11 @@
     <div class="grid">
       {% for s in sellers %}
         <a class="card" href="{{ url_for('seller_public', seller_id=s['id']) }}">
-          <div class="card-emoji">{{ s['emoji'] }}</div>
+          {% if s['photo_filename'] %}
+            <img class="card-photo" src="{{ url_for('static', filename='uploads/' + s['photo_filename']) }}" alt="">
+          {% else %}
+            <div class="card-emoji">{{ s['emoji'] }}</div>
+          {% endif %}
           <div class="card-body">
             <h3>{{ s['business_name'] }}</h3>
             <p class="muted">{{ s['cuisine'] or 'Home cooking' }} · {{ s['city'] }}</p>

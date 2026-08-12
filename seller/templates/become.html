@@ -3,12 +3,13 @@
 {% block content %}
   <h1>Set up your seller page</h1>
   <p class="muted">You're logged in as {{ g.user['name'] }} — just add your business details to start selling.</p>
-  <form method="post" class="form narrow">
+  <form method="post" enctype="multipart/form-data" class="form narrow">
     <label>Business or cook name <input type="text" name="business_name" value="{{ form.get('business_name','') }}" required placeholder="e.g. Maria's Kitchen"></label>
     <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>
     <label>Cuisine / specialty <input type="text" name="cuisine" value="{{ form.get('cuisine','') }}" placeholder="e.g. Homestyle Mexican"></label>
     <label>Short bio <textarea name="bio" rows="3">{{ form.get('bio','') }}</textarea></label>
-    <label>Pick an emoji for your page <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
+    <label>Business photo (optional) <input type="file" name="photo" accept="image/*"></label>
+    <label>Emoji (used if no photo is set) <input type="text" name="emoji" value="{{ form.get('emoji','🍽️') }}" maxlength="4"></label>
     <button type="submit" class="btn">Create seller page</button>
   </form>
 {% endblock %}

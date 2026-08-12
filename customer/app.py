@@ -7,9 +7,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_db, init_db  # noqa: E402
+from uploads import save_upload, delete_upload  # noqa: E402
 
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB per upload
 
 # Where the seller portal lives. In production this becomes something like
 # https://sell.localfork.com — set the SELLER_PORTAL_URL env var to point there.
@@ -135,6 +137,31 @@ def login():
         flash(f"Welcome back, {user['name']}!")
         return redirect(request.args.get("next") or url_for("home"))
     return render_template("login.html", email="")
+
+
+@app.route("/account", methods=["GET", "POST"])
+@login_required
+def account():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if not name:
+            flash("Name can't be empty.")
+            return render_template("account.html")
+        new_photo = save_upload(request.files.get("photo"))
+        photo_filename = g.user["photo_filename"]
+        if request.form.get("remove_photo") == "1":
+            delete_upload(photo_filename)
+            photo_filename = None
+        if new_photo:
+            delete_upload(photo_filename)
+            photo_filename = new_photo
+        g.db.execute(
+            "UPDATE users SET name=?, photo_filename=? WHERE id=?", (name, photo_filename, g.user["id"])
+        )
+        g.db.commit()
+        flash("Profile updated.")
+        return redirect(url_for("account"))
+    return render_template("account.html")
 
 
 @app.route("/logout")

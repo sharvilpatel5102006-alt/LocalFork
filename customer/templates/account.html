@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Your profile{% endblock %}
+{% block content %}
+  <h1>Your profile</h1>
+  <form method="post" enctype="multipart/form-data" class="form narrow">
+    <div class="photo-field">
+      {% if g.user['photo_filename'] %}
+        <img class="avatar avatar-lg" src="{{ url_for('static', filename='uploads/' + g.user['photo_filename']) }}" alt="">
+      {% else %}
+        <span class="avatar avatar-lg">{{ g.user['name'][0]|upper }}</span>
+      {% endif %}
+      <div>
+        <input type="file" name="photo" accept="image/*">
+        {% if g.user['photo_filename'] %}
+          <label class="muted small"><input type="checkbox" name="remove_photo" value="1"> Remove current photo</label>
+        {% endif %}
+      </div>
+    </div>
+    <label>Name <input type="text" name="name" value="{{ g.user['name'] }}" required></label>
+    <p class="muted small">Email: {{ g.user['email'] }}</p>
+    <button type="submit" class="btn">Save changes</button>
+  </form>
+{% endblock %}
