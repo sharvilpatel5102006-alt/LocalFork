@@ -52,6 +52,7 @@ def load_user():
     g.user = None
     g.seller = None
     g.unread_messages = 0
+    g.new_orders = 0
     user_id = session.get("user_id")
     if user_id:
         g.user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -67,6 +68,11 @@ def load_user():
                     (g.seller["id"],),
                 ).fetchone()
                 g.unread_messages = row["n"]
+                row = g.db.execute(
+                    "SELECT COUNT(*) AS n FROM orders WHERE seller_id = ? AND status = 'placed'",
+                    (g.seller["id"],),
+                ).fetchone()
+                g.new_orders = row["n"]
 
 
 @app.teardown_appcontext
