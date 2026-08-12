@@ -90,12 +90,42 @@ static/
   seller.css                 – seller-portal-only accents (dark header, etc.)
   uploads/                   – uploaded photos land here (not in git)
 uploads.py                   – shared photo upload/delete helper
+wsgi_combined.py             – runs both sites in one process for the quick test deploy only
 instance/                    – the database file lives here (not in git)
 ```
 
+## Quick test deploy (free, ~15 minutes, one link to share)
+
+Want a real public URL to try yourself or hand to someone else, without doing the full production setup below? Here's the fast path — no domain, no database migration, no payment setup.
+
+**Why this needs a small tweak first:** the customer and seller sites share one SQLite file *only because they run on the same computer*. If you deployed them as two separate services on a host like Render, each one gets its own isolated disk — orders placed on the customer site would never show up for the seller. To keep them sharing one database for a quick test, this repo includes `wsgi_combined.py`, which runs both sites in a single process: the customer site at the root URL and the seller portal at `/seller`. I tested this locally (via gunicorn, the same server a host would use) — placing an order through the customer side and confirming it appeared instantly on the seller side — before writing these steps.
+
+**Limitations worth knowing before you share the link:** free-tier services on most hosts "sleep" after ~15 minutes of no traffic, so the first visit after a quiet spell takes 30–50 seconds to wake up. Also, a restart can reset the SQLite file back to the seeded sample data — fine for a demo, not a place to leave data you care about.
+
+1. **Push this code to GitHub** (create a free account at github.com if you don't have one, then create a new repository):
+   ```bash
+   cd ~/localfork
+   git remote add origin https://github.com/YOUR-USERNAME/localfork.git
+   git push -u origin main
+   ```
+
+2. **Create a free account at [render.com](https://render.com)** — signing in with GitHub is easiest, since it can then see your repo directly.
+
+3. **New → Web Service → pick your repo**, then set:
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `gunicorn wsgi_combined:application`
+   - Instance type: Free
+   - Environment variables: `SELLER_PORTAL_URL` = `/seller`, `CUSTOMER_SITE_URL` = `/`, and `SECRET_KEY` = a random string (generate one with `python3 -c "import secrets; print(secrets.token_hex(32))"` — this signs login sessions, so don't leave it as the code's default once the app is public)
+
+   Click **Create Web Service**. Render builds it and gives you one URL, e.g. `https://localfork-test.onrender.com`.
+
+4. **Try it:** the customer site is at that URL directly; the seller portal is at `<that URL>/seller`.
+
+This is genuinely one shared app for testing, not the two-independent-sites production architecture — see "Going live" below for deploying them as real separate services once you're past the testing stage.
+
 ## Going live (real public websites)
 
-Everything above runs only on this computer. To get real public links, roughly in order:
+Everything above (aside from the quick test deploy) runs only on this computer. To get real public links as two properly independent sites, roughly in order:
 
 1. **Put the code on GitHub.**
    ```bash
