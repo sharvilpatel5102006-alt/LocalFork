@@ -145,7 +145,7 @@ def signup():
         g.db.commit()
         session["user_id"] = user_id
         flash(f"Welcome to LocalFork, {business_name}!")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("menu_page"))
     return render_template("signup.html", form={})
 
 
@@ -175,7 +175,7 @@ def become():
         )
         g.db.commit()
         flash("Your seller page is live! Add some menu items to get started.")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("menu_page"))
     return render_template("become.html", form={})
 
 
@@ -258,7 +258,7 @@ def business_edit():
         )
         g.db.commit()
         flash("Business page updated.")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("menu_page"))
     return render_template("business_form.html", form=dict(g.seller))
 
 
@@ -280,14 +280,22 @@ def messages_inbox():
     return render_template("messages_inbox.html", threads=threads, status_labels=STATUS_LABELS)
 
 
-# ---------- Dashboard ----------
+# ---------- Menu ----------
+
+@app.route("/menu")
+@seller_required
+def menu_page():
+    items = g.db.execute(
+        "SELECT * FROM menu_items WHERE seller_id = ? ORDER BY created_at DESC", (g.seller["id"],)
+    ).fetchall()
+    return render_template("menu.html", items=items)
+
+
+# ---------- Orders ----------
 
 @app.route("/dashboard")
 @seller_required
 def dashboard():
-    items = g.db.execute(
-        "SELECT * FROM menu_items WHERE seller_id = ? ORDER BY created_at DESC", (g.seller["id"],)
-    ).fetchall()
     orders = g.db.execute(
         """SELECT o.*, u.name AS buyer_name FROM orders o
            JOIN users u ON u.id = o.buyer_id
@@ -303,7 +311,7 @@ def dashboard():
         (g.seller["id"],),
     ).fetchall()
     return render_template(
-        "dashboard.html", items=items, orders=orders, past_orders=past_orders, status_labels=STATUS_LABELS
+        "dashboard.html", orders=orders, past_orders=past_orders, status_labels=STATUS_LABELS
     )
 
 
@@ -333,7 +341,7 @@ def menu_new():
         )
         g.db.commit()
         flash(f"Added {name} to your menu.")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("menu_page"))
     return render_template("menu_form.html", form={}, mode="new")
 
 
@@ -375,7 +383,7 @@ def menu_edit(item_id):
         )
         g.db.commit()
         flash("Menu item updated.")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("menu_page"))
     return render_template("menu_form.html", form=dict(item), mode="edit", item=item)
 
 
@@ -391,7 +399,7 @@ def menu_toggle(item_id):
         "UPDATE menu_items SET is_available = ? WHERE id = ?", (0 if item["is_available"] else 1, item_id)
     )
     g.db.commit()
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("menu_page"))
 
 
 @app.route("/menu/<int:item_id>/delete", methods=["POST"])
@@ -405,7 +413,7 @@ def menu_delete(item_id):
     g.db.execute("DELETE FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"]))
     g.db.commit()
     flash("Menu item removed.")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("menu_page"))
 
 
 def _get_own_seller_order(order_id):

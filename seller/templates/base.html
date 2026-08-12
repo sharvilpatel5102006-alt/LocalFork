@@ -13,6 +13,7 @@
       <a class="brand" href="{{ url_for('landing') }}">🍴 LocalFork <span class="portal-tag">for Cooks</span></a>
       <nav class="nav">
         {% if g.seller %}
+          <a href="{{ url_for('menu_page') }}">Menu</a>
           <a href="{{ url_for('dashboard') }}" class="nav-messages">
             Orders{% if g.new_orders %} <span class="badge badge-soon">{{ g.new_orders }}</span>{% endif %}
           </a>

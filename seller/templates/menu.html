@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Your menu{% endblock %}
+{% block content %}
+  <section class="seller-header">
+    {% if g.seller['photo_filename'] %}
+      <img class="seller-photo" src="{{ url_for('static', filename='uploads/' + g.seller['photo_filename']) }}" alt="">
+    {% else %}
+      <div class="seller-emoji">{{ g.seller['emoji'] }}</div>
+    {% endif %}
+    <div>
+      <h1>{{ g.seller['business_name'] }}</h1>
+      <p class="muted">
+        <a href="{{ CUSTOMER_SITE_URL }}/seller/{{ g.seller['id'] }}">View your public page ↗</a>
+        · <a href="{{ url_for('business_edit') }}">Edit business page</a>
+      </p>
+    </div>
+  </section>
+
+  <div class="dash-section-head">
+    <h2 class="section-title">Your menu</h2>
+    <a href="{{ url_for('menu_new') }}" class="btn-small">+ Add dish</a>
+  </div>
+  {% if items %}
+    <div class="menu-list">
+      {% for item in items %}
+        <div class="menu-item {% if not item['is_available'] %}unavailable{% endif %}">
+          {% if item['photo_filename'] %}
+            <img class="menu-photo" src="{{ url_for('static', filename='uploads/' + item['photo_filename']) }}" alt="">
+          {% else %}
+            <div class="menu-emoji">{{ item['emoji'] }}</div>
+          {% endif %}
+          <div class="menu-info">
+            <h3>{{ item['name'] }} {% if not item['is_available'] %}<span class="muted small">(hidden)</span>{% endif %}</h3>
+            <p class="muted small">{{ item['description'] }}</p>
+            <p class="price">{{ item['price_cents']|usd }}</p>
+          </div>
+          <div class="menu-actions">
+            <a href="{{ url_for('menu_edit', item_id=item['id']) }}" class="btn-ghost small">Edit</a>
+            <form method="post" action="{{ url_for('menu_toggle', item_id=item['id']) }}">
+              <button type="submit" class="btn-ghost small">{{ 'Hide' if item['is_available'] else 'Show' }}</button>
+            </form>
+            <form method="post" action="{{ url_for('menu_delete', item_id=item['id']) }}" onsubmit="return confirm('Remove this dish?');">
+              <button type="submit" class="btn-ghost small danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No dishes yet. <a href="{{ url_for('menu_new') }}">Add your first one →</a></p>
+  {% endif %}
+{% endblock %}
