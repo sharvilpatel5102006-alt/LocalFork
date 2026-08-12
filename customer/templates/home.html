@@ -10,15 +10,9 @@
     </form>
   </section>
 
-  {% if not g.seller and g.user %}
-    <div class="banner">
-      Cook at home or run a small food business? <a href="{{ url_for('become_seller') }}">Set up your seller page →</a>
-    </div>
-  {% elif not g.user %}
-    <div class="banner">
-      Want to sell your own food? <a href="{{ url_for('signup') }}">Sign up</a> and set up a seller page.
-    </div>
-  {% endif %}
+  <div class="banner">
+    Cook at home or run a small food business? <a href="{{ SELLER_PORTAL_URL }}">Start selling on LocalFork ↗</a>
+  </div>
 
   <h2 class="section-title">{% if city %}Cooks near "{{ city }}"{% else %}All cooks{% endif %}</h2>
 

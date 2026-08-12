@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Sell your food{% endblock %}
+{% block title %}Set up your seller page{% endblock %}
 {% block content %}
   <h1>Set up your seller page</h1>
-  <p class="muted">No storefront needed — just tell people what you cook and where you are.</p>
+  <p class="muted">You're logged in as {{ g.user['name'] }} — just add your business details to start selling.</p>
   <form method="post" class="form narrow">
     <label>Business or cook name <input type="text" name="business_name" value="{{ form.get('business_name','') }}" required placeholder="e.g. Maria's Kitchen"></label>
     <label>City / neighborhood <input type="text" name="city" value="{{ form.get('city','') }}" required></label>

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Sell your food on LocalFork{% endblock %}
+{% block content %}
+  <section class="hero">
+    <h1>Sell your home cooking. No restaurant needed.</h1>
+    <p>Set up a page in a few minutes, list your dishes, and start taking orders from people nearby.</p>
+    <div class="actions" style="justify-content:center">
+      <a href="{{ url_for('signup') }}" class="btn">Start selling →</a>
+      <a href="{{ url_for('login') }}" class="btn-ghost">I already have an account</a>
+    </div>
+  </section>
+{% endblock %}

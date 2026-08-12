@@ -3,29 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}LocalFork{% endblock %} · LocalFork</title>
+  <title>{% block title %}Seller Portal{% endblock %} · LocalFork for Cooks</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='seller.css') }}">
 </head>
 <body>
-  <header class="topbar">
+  <header class="topbar seller-topbar">
     <div class="wrap topbar-inner">
-      <a class="brand" href="{{ url_for('home') }}">🍴 LocalFork</a>
+      <a class="brand" href="{{ url_for('landing') }}">🍴 LocalFork <span class="portal-tag">for Cooks</span></a>
       <nav class="nav">
-        <a href="{{ url_for('home') }}">Browse</a>
+        {% if g.seller %}
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        {% endif %}
+        <a href="{{ CUSTOMER_SITE_URL }}">View customer site ↗</a>
         {% if g.user %}
-          <a href="{{ url_for('my_orders') }}">My orders</a>
-          {% if g.seller %}
-            <a href="{{ url_for('dashboard') }}">Seller dashboard</a>
-          {% else %}
-            <a href="{{ url_for('become_seller') }}">Sell your food</a>
-          {% endif %}
-          <a class="cart-link" href="{{ url_for('cart_view') }}">Cart{% if g.cart_count %} ({{ g.cart_count }}){% endif %}</a>
           <span class="who">Hi, {{ g.user['name'] }}</span>
           <a href="{{ url_for('logout') }}">Log out</a>
         {% else %}
-          <a href="{{ url_for('cart_view') }}">Cart{% if g.cart_count %} ({{ g.cart_count }}){% endif %}</a>
           <a href="{{ url_for('login') }}">Log in</a>
-          <a class="btn-small" href="{{ url_for('signup') }}">Sign up</a>
+          <a class="btn-small" href="{{ url_for('signup') }}">Start selling</a>
         {% endif %}
       </nav>
     </div>
@@ -43,7 +39,7 @@
   </main>
 
   <footer class="footer">
-    <div class="wrap">LocalFork — a marketplace for home cooks and small food businesses.</div>
+    <div class="wrap">LocalFork for Cooks — the seller side of <a href="{{ CUSTOMER_SITE_URL }}">LocalFork ↗</a></div>
   </footer>
 </body>
 </html>

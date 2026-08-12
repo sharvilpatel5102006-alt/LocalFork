@@ -1,15 +1,20 @@
 import os
+import sys
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from db import get_db, init_db
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from db import get_db, init_db  # noqa: E402
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
-STATUS_FLOW = ["placed", "accepted", "ready", "completed"]
+# Where the seller portal lives. In production this becomes something like
+# https://sell.localfork.com — set the SELLER_PORTAL_URL env var to point there.
+SELLER_PORTAL_URL = os.environ.get("SELLER_PORTAL_URL", "http://localhost:5051")
+
 STATUS_LABELS = {
     "placed": "Order placed",
     "accepted": "Accepted by cook",
@@ -24,20 +29,16 @@ def usd(cents):
 
 
 app.jinja_env.filters["usd"] = usd
+app.jinja_env.globals["SELLER_PORTAL_URL"] = SELLER_PORTAL_URL
 
 
 @app.before_request
 def load_user():
     g.db = get_db()
     g.user = None
-    g.seller = None
     user_id = session.get("user_id")
     if user_id:
         g.user = g.db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        if g.user:
-            g.seller = g.db.execute(
-                "SELECT * FROM seller_profiles WHERE user_id = ?", (user_id,)
-            ).fetchone()
     cart = session.get("cart")
     g.cart_count = sum(cart["items"].values()) if cart else 0
 
@@ -55,20 +56,6 @@ def login_required(view):
         if not g.user:
             flash("Please log in first.")
             return redirect(url_for("login", next=request.path))
-        return view(*args, **kwargs)
-
-    return wrapped
-
-
-def seller_required(view):
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        if not g.user:
-            flash("Please log in first.")
-            return redirect(url_for("login", next=request.path))
-        if not g.seller:
-            flash("You need a seller page first.")
-            return redirect(url_for("become_seller"))
         return view(*args, **kwargs)
 
     return wrapped
@@ -155,32 +142,6 @@ def logout():
     session.clear()
     flash("Logged out.")
     return redirect(url_for("home"))
-
-
-# ---------- Become a seller ----------
-
-@app.route("/sell", methods=["GET", "POST"])
-@login_required
-def become_seller():
-    if g.seller:
-        return redirect(url_for("dashboard"))
-    if request.method == "POST":
-        business_name = request.form.get("business_name", "").strip()
-        city = request.form.get("city", "").strip()
-        cuisine = request.form.get("cuisine", "").strip()
-        bio = request.form.get("bio", "").strip()
-        emoji = request.form.get("emoji", "🍽️").strip() or "🍽️"
-        if not business_name or not city:
-            flash("Business name and city are required.")
-            return render_template("become_seller.html", form=request.form)
-        g.db.execute(
-            "INSERT INTO seller_profiles (user_id, business_name, bio, cuisine, city, emoji) VALUES (?, ?, ?, ?, ?, ?)",
-            (g.user["id"], business_name, bio, cuisine, city, emoji),
-        )
-        g.db.commit()
-        flash("Your seller page is live! Add some menu items to get started.")
-        return redirect(url_for("dashboard"))
-    return render_template("become_seller.html", form={})
 
 
 # ---------- Cart ----------
@@ -319,132 +280,16 @@ def my_orders():
 @login_required
 def order_detail(order_id):
     order = g.db.execute(
-        """SELECT o.*, sp.business_name, sp.id AS seller_id, sp.user_id AS seller_user_id
-           FROM orders o JOIN seller_profiles sp ON sp.id = o.seller_id WHERE o.id = ?""",
+        """SELECT o.*, sp.business_name FROM orders o
+           JOIN seller_profiles sp ON sp.id = o.seller_id WHERE o.id = ?""",
         (order_id,),
     ).fetchone()
     if not order:
         abort(404)
-    if order["buyer_id"] != g.user["id"] and order["seller_user_id"] != g.user["id"]:
+    if order["buyer_id"] != g.user["id"]:
         abort(403)
     items = g.db.execute("SELECT * FROM order_items WHERE order_id = ?", (order_id,)).fetchall()
-    return render_template(
-        "order_detail.html", order=order, items=items, status_flow=STATUS_FLOW, status_labels=STATUS_LABELS
-    )
-
-
-# ---------- Seller dashboard ----------
-
-@app.route("/dashboard")
-@seller_required
-def dashboard():
-    items = g.db.execute(
-        "SELECT * FROM menu_items WHERE seller_id = ? ORDER BY created_at DESC", (g.seller["id"],)
-    ).fetchall()
-    orders = g.db.execute(
-        """SELECT o.*, u.name AS buyer_name FROM orders o
-           JOIN users u ON u.id = o.buyer_id
-           WHERE o.seller_id = ? ORDER BY o.created_at DESC""",
-        (g.seller["id"],),
-    ).fetchall()
-    return render_template(
-        "dashboard.html", items=items, orders=orders, status_labels=STATUS_LABELS
-    )
-
-
-@app.route("/dashboard/menu/new", methods=["GET", "POST"])
-@seller_required
-def menu_new():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        description = request.form.get("description", "").strip()
-        price = request.form.get("price", "").strip()
-        emoji = request.form.get("emoji", "🍲").strip() or "🍲"
-        try:
-            price_cents = int(round(float(price) * 100))
-        except ValueError:
-            price_cents = -1
-        if not name or price_cents <= 0:
-            flash("Please provide a dish name and a valid price.")
-            return render_template("menu_form.html", form=request.form, mode="new")
-        g.db.execute(
-            "INSERT INTO menu_items (seller_id, name, description, price_cents, emoji) VALUES (?, ?, ?, ?, ?)",
-            (g.seller["id"], name, description, price_cents, emoji),
-        )
-        g.db.commit()
-        flash(f"Added {name} to your menu.")
-        return redirect(url_for("dashboard"))
-    return render_template("menu_form.html", form={}, mode="new")
-
-
-@app.route("/dashboard/menu/<int:item_id>/edit", methods=["GET", "POST"])
-@seller_required
-def menu_edit(item_id):
-    item = g.db.execute(
-        "SELECT * FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"])
-    ).fetchone()
-    if not item:
-        abort(404)
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        description = request.form.get("description", "").strip()
-        price = request.form.get("price", "").strip()
-        emoji = request.form.get("emoji", "🍲").strip() or "🍲"
-        try:
-            price_cents = int(round(float(price) * 100))
-        except ValueError:
-            price_cents = -1
-        if not name or price_cents <= 0:
-            flash("Please provide a dish name and a valid price.")
-            return render_template("menu_form.html", form=request.form, mode="edit", item=item)
-        g.db.execute(
-            "UPDATE menu_items SET name=?, description=?, price_cents=?, emoji=? WHERE id=?",
-            (name, description, price_cents, emoji, item_id),
-        )
-        g.db.commit()
-        flash("Menu item updated.")
-        return redirect(url_for("dashboard"))
-    return render_template("menu_form.html", form=dict(item), mode="edit", item=item)
-
-
-@app.route("/dashboard/menu/<int:item_id>/toggle", methods=["POST"])
-@seller_required
-def menu_toggle(item_id):
-    item = g.db.execute(
-        "SELECT * FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"])
-    ).fetchone()
-    if not item:
-        abort(404)
-    g.db.execute(
-        "UPDATE menu_items SET is_available = ? WHERE id = ?", (0 if item["is_available"] else 1, item_id)
-    )
-    g.db.commit()
-    return redirect(url_for("dashboard"))
-
-
-@app.route("/dashboard/menu/<int:item_id>/delete", methods=["POST"])
-@seller_required
-def menu_delete(item_id):
-    g.db.execute("DELETE FROM menu_items WHERE id = ? AND seller_id = ?", (item_id, g.seller["id"]))
-    g.db.commit()
-    flash("Menu item removed.")
-    return redirect(url_for("dashboard"))
-
-
-@app.route("/dashboard/orders/<int:order_id>/status", methods=["POST"])
-@seller_required
-def order_status(order_id):
-    order = g.db.execute(
-        "SELECT * FROM orders WHERE id = ? AND seller_id = ?", (order_id, g.seller["id"])
-    ).fetchone()
-    if not order:
-        abort(404)
-    new_status = request.form.get("status")
-    if new_status not in STATUS_LABELS:
-        abort(400)
-    g.db.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
-    g.db.commit()
-    return redirect(request.referrer or url_for("dashboard"))
+    return render_template("order_detail.html", order=order, items=items, status_labels=STATUS_LABELS)
 
 
 if __name__ == "__main__":

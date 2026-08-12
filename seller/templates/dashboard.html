@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Seller dashboard{% endblock %}
+{% block title %}Dashboard{% endblock %}
 {% block content %}
   <h1>{{ g.seller['business_name'] }}</h1>
-  <p class="muted"><a href="{{ url_for('seller_public', seller_id=g.seller['id']) }}">View your public page →</a></p>
+  <p class="muted"><a href="{{ CUSTOMER_SITE_URL }}/seller/{{ g.seller['id'] }}">View your public page ↗</a></p>
 
   <div class="dash-section-head">
     <h2 class="section-title">Your menu</h2>

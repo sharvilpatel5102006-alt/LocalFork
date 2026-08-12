@@ -2,37 +2,55 @@
 
 A marketplace where home cooks and small food businesses can list dishes and take orders — no storefront, no restaurant license required to get started. Think "Facebook Marketplace meets DoorDash," but for people who cook at home.
 
-Working name only — rename anytime, it's just text in a few places (see "Renaming" below).
+Working name only — rename anytime, it's just text in a couple of files (see "Renaming" below).
+
+## Two sites, one database
+
+This is built as **two separate websites that share one database**, the same way DoorDash's customer app and its merchant portal are two different products backed by the same orders:
+
+- **`customer/`** — the public site. Browse cooks, view menus, cart, checkout, track orders.
+- **`seller/`** — the seller portal. A different look (dark header, "LocalFork for Cooks" branding), separate signup flow, menu management, and incoming-order management.
+
+They're separate Flask apps, on separate ports, with separate templates — but both read/write the same `instance/localfork.db`, so a dish added in the seller portal appears on the customer site instantly, and an order placed on the customer site appears in the seller portal instantly. In production these become two subdomains (e.g. `localfork.com` and `sell.localfork.com`) pointed at the same database — nothing about the app logic needs to change for that.
+
+**Login is shared between the two sites** (same session cookie, same user table). If someone already has a buyer account and visits the seller portal, they're prompted to add a business profile to their existing account rather than creating a whole new one — again, exactly like Airbnb host/guest or Uber rider/driver sharing one identity.
 
 ## What's built
 
-- **Browse & search** — buyers see all cooks, or search by city/neighborhood
-- **Seller pages** — each cook has a public page with their menu, prices, and bio
-- **Cart & checkout** — buyers build a cart from one cook at a time and place an order (pickup or delivery)
-- **Accounts** — signup/login for buyers; any account can also become a seller
-- **Seller dashboard** — cooks add/edit/hide/delete menu items and manage incoming orders (placed → accepted → ready → completed)
-- **Real shared data** — everything lives in one database, so what a seller lists is what every buyer sees, and orders placed by buyers show up for the seller live. This is a real multi-user app, not a personal demo.
+**Customer site:**
+- Browse & search cooks by city
+- Public seller pages with menu, prices, bio
+- Cart with +/- quantity steppers, checkout (pickup or delivery)
+- Buyer signup/login and order history/tracking
 
-Payment today is "pay the cook directly at pickup/delivery" — no card processing yet. See "Going live" below for adding real online payments.
+**Seller portal:**
+- Dedicated signup (creates account + business profile together) or "add a seller profile" for an existing account
+- Dashboard: add/edit/hide/delete menu items
+- Incoming orders with status updates (placed → accepted → ready → completed)
+
+Payment today is "pay the cook directly at pickup/delivery" — no card processing yet. See "Going live" below.
 
 ## Running it on your computer
 
-You need Python 3 (already installed on this Mac). From the `localfork` folder:
+You need Python 3 (already installed on this Mac). From the `localfork` folder, in **two separate terminal windows**:
 
 ```bash
+# Terminal 1 — customer site
 cd ~/localfork
 python3 -m pip install -r requirements.txt
-python3 app.py
+python3 customer/app.py
 ```
 
-Then open **http://localhost:5050** in your browser.
+```bash
+# Terminal 2 — seller portal
+cd ~/localfork
+python3 seller/app.py
+```
 
-Sample accounts (already seeded — password is `password123` for all):
-- `maria@example.com` — Maria's Kitchen (Mexican)
-- `priya@example.com` — Priya's Tiffin (South Indian)
-- `sam@example.com` — Sam's Backyard BBQ
+- Customer site: **http://localhost:5050**
+- Seller portal: **http://localhost:5051**
 
-Or sign up as a new buyer and place an order against one of them, then log in as that seller to see the order arrive in their dashboard.
+Sample seller accounts (password `password123` for all): `maria@example.com`, `priya@example.com`, `sam@example.com`. Log into the seller portal with one of these to see its dashboard, or sign up fresh as a buyer on the customer site and place an order.
 
 To wipe and reseed the sample data at any point:
 ```bash
@@ -44,36 +62,44 @@ python3 seed.py
 ## Project layout
 
 ```
-app.py           – routes / all the logic
-db.py            – SQLite connection helper
-schema.sql       – database tables
-seed.py          – sample cooks & menu items
-templates/       – HTML pages (Jinja2)
-static/style.css – all styling
-instance/        – the database file lives here (not in git)
+db.py, schema.sql, seed.py   – shared database (used by both sites)
+customer/
+  app.py                     – buyer-facing routes
+  templates/
+seller/
+  app.py                     – seller-facing routes
+  templates/
+static/
+  style.css                  – shared design system
+  seller.css                 – seller-portal-only accents (dark header, etc.)
+instance/                    – the database file lives here (not in git)
 ```
 
-## Going live (real public website)
+## Going live (real public websites)
 
-Everything above runs only on this computer. To get a real public link real people can use, here's the path, roughly in order:
+Everything above runs only on this computer. To get real public links, roughly in order:
 
-1. **Put the code on GitHub.** Most hosts deploy straight from a git repo.
+1. **Put the code on GitHub.**
    ```bash
    cd ~/localfork
-   git init && git add . && git commit -m "Initial LocalFork app"
+   git add . && git commit -m "Split into customer + seller sites"
    ```
-   Then create a repo on github.com and push to it.
+   (already a git repo — just push to a GitHub repo you create)
 
-2. **Pick a host and deploy.** [Render.com](https://render.com) has a free tier for small Flask apps and is beginner-friendly: connect your GitHub repo, tell it to run `python app.py`, done. Railway and Fly.io are similar alternatives. You'll need to create an account on whichever you choose — that's a step only you can do.
+2. **Deploy both apps.** [Render.com](https://render.com) (free tier, beginner-friendly), Railway, or Fly.io all work — you'd deploy `customer/app.py` and `seller/app.py` as two separate services. You'll need to create an account with whichever host you pick; that step only you can do.
 
-3. **Move off SQLite for real traffic.** SQLite (the current database) is a single file and works fine for testing, but a production app with multiple people using it at once should use a hosted Postgres database (Render, Railway, and Supabase all offer a free Postgres instance). This mainly means swapping `db.py` to connect to Postgres instead of a local file — the rest of the app's logic doesn't change.
+3. **Point real domains/subdomains at each.** E.g. `localfork.com` → customer service, `sell.localfork.com` → seller service. Then set two environment variables so each app links to the other correctly:
+   - Customer app: `SELLER_PORTAL_URL=https://sell.localfork.com`
+   - Seller app: `CUSTOMER_SITE_URL=https://localfork.com`
 
-4. **Add real payments.** The natural fit here is **Stripe Connect**, built specifically for marketplaces where money needs to flow through to many different sellers, not just one business owner. Each cook would connect their own Stripe account to receive payouts. This requires you (the platform owner) to create a Stripe account and enable Connect — I can write the integration code, but creating that account and agreeing to Stripe's terms has to be done by you.
+4. **Share login across the two subdomains.** Right now the shared-cookie trick works because both apps run on `localhost` (browsers ignore port when matching cookies). Once these are on real subdomains, set `SESSION_COOKIE_DOMAIN=".localfork.com"` (both apps, same `SECRET_KEY`) so the login cookie is valid on both `localfork.com` and `sell.localfork.com`.
 
-5. **Get a domain** (e.g. from Namecheap or Google Domains) and point it at your host once step 2 is live.
+5. **Move off SQLite.** A single SQLite file is fine for testing but two separate deployed services hitting one file gets fragile fast. Use a hosted Postgres (Render, Railway, and Supabase all offer a free tier) — this is a change to `db.py` only, not to the app logic.
 
-6. **Check food-selling regulations before real money changes hands.** Most US states have "cottage food laws" governing what home cooks can legally sell, whether they need a permit, and what foods are restricted (this varies a lot by state/country). This isn't a coding step, but it matters before treating this as a real business — worth a quick search for your state's cottage food law before launching to the public.
+6. **Add real payments.** The natural fit is **Stripe Connect**, built for marketplaces where money needs to flow through to many different sellers. Each cook connects their own Stripe account for payouts. I can write the integration — creating the Stripe account and agreeing to its terms has to be done by you.
+
+7. **Check food-selling regulations before real money changes hands.** Most US states have "cottage food laws" governing what home cooks can legally sell and whether they need a permit; this varies by state/country. Worth a quick search for your state's rules before treating this as a real business.
 
 ## Renaming
 
-The name "LocalFork" only appears in `templates/base.html` (site title/logo) and `README.md`. Change those two and you're rebranded.
+"LocalFork" appears in `customer/templates/base.html`, `seller/templates/base.html`, and this README. Change those and you're rebranded.

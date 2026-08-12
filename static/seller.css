@@ -1,0 +1,22 @@
+/* Seller portal accents — layered on top of style.css so both sites share one
+   design system but the portal reads as a distinct, business-facing tool. */
+
+.seller-topbar {
+  background: var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+.seller-topbar .brand,
+.seller-topbar .nav a,
+.seller-topbar .who {
+  color: var(--cream);
+}
+.seller-topbar .nav a:hover {
+  color: #ffcda0;
+}
+.portal-tag {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: #d8c6b4;
+  vertical-align: middle;
+  margin-left: 2px;
+}
