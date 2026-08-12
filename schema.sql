@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     photo_filename TEXT,
+    reset_token TEXT,
+    reset_token_expires TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

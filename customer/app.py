@@ -1,6 +1,7 @@
 import os
+import secrets
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, abort, jsonify
@@ -11,6 +12,9 @@ from db import get_db, init_db  # noqa: E402
 from uploads import save_upload, delete_upload  # noqa: E402
 import scheduling  # noqa: E402
 from moderation import check_message  # noqa: E402
+from email_utils import send_email  # noqa: E402
+
+RESET_TOKEN_MINUTES = 60
 
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -153,6 +157,65 @@ def login():
         flash(f"Welcome back, {user['name']}!")
         return redirect(request.args.get("next") or url_for("home"))
     return render_template("login.html", email="")
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user = g.db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if user:
+            token = secrets.token_urlsafe(32)
+            expires = (datetime.now() + timedelta(minutes=RESET_TOKEN_MINUTES)).strftime("%Y-%m-%dT%H:%M:%S")
+            g.db.execute(
+                "UPDATE users SET reset_token=?, reset_token_expires=? WHERE id=?",
+                (token, expires, user["id"]),
+            )
+            g.db.commit()
+            reset_url = url_for("reset_password", token=token, _external=True)
+            body = (
+                f"Hi {user['name']},\n\n"
+                "Someone requested a password reset for your LocalFork account. "
+                f"If this was you, click the link below within the next hour:\n\n"
+                f"{reset_url}\n\n"
+                "If you didn't request this, you can safely ignore this email."
+            )
+            sent = send_email(user["email"], "Reset your LocalFork password", body)
+            if not sent:
+                app.logger.info(f"[DEV MODE — no email service configured] Password reset link for {user['email']}: {reset_url}")
+        # Same message whether or not the email was found, so this can't be used to
+        # check which addresses have accounts.
+        flash("If an account exists with that email, we've sent a link to reset your password.")
+        return redirect(url_for("login"))
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    user = g.db.execute("SELECT * FROM users WHERE reset_token = ?", (token,)).fetchone()
+    valid = user and user["reset_token_expires"] and datetime.now() <= datetime.strptime(
+        user["reset_token_expires"], "%Y-%m-%dT%H:%M:%S"
+    )
+    if not valid:
+        flash("That reset link is invalid or has expired. Request a new one below.")
+        return redirect(url_for("forgot_password"))
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+        if len(password) < 6:
+            flash("Password needs to be at least 6 characters.")
+            return render_template("reset_password.html", token=token)
+        if password != confirm:
+            flash("Passwords don't match.")
+            return render_template("reset_password.html", token=token)
+        g.db.execute(
+            "UPDATE users SET password_hash=?, reset_token=NULL, reset_token_expires=NULL WHERE id=?",
+            (generate_password_hash(password, method="pbkdf2:sha256"), user["id"]),
+        )
+        g.db.commit()
+        flash("Password updated — log in with your new password.")
+        return redirect(url_for("login"))
+    return render_template("reset_password.html", token=token)
 
 
 @app.route("/account", methods=["GET", "POST"])

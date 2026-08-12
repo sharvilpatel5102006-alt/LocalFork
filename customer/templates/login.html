@@ -7,5 +7,6 @@
     <label>Password <input type="password" name="password" required></label>
     <button type="submit" class="btn">Log in</button>
   </form>
+  <p class="muted"><a href="{{ url_for('forgot_password') }}">Forgot password?</a></p>
   <p class="muted">No account yet? <a href="{{ url_for('signup') }}">Sign up</a></p>
 {% endblock %}

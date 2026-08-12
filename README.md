@@ -35,6 +35,21 @@ They're separate Flask apps, on separate ports, with separate templates — but 
 **Both sites:**
 - `/account` — anyone can set their display name and upload a profile photo; it shows up as a small avatar in the nav on both sites (falls back to an initial-letter circle if no photo is set)
 - In-app messaging per order (no email/SMS involved). Messages run through a small word filter — a blocked message never reaches the other person; the attempt is logged to a `flagged_messages` table (and the dev-side app log) instead of being silently dropped with no record.
+- "Forgot password?" on both login pages — sends a time-limited (1 hour), single-use reset link. **Without SMTP configured, no real email is sent** — the link is written to the server's console/log instead, so it still works for local testing. See "Sending real emails" below to wire up an actual provider.
+
+### Sending real emails (password reset)
+
+By default there's no email service connected — `email_utils.py` falls back to logging the reset link to the server console (visible in the terminal, or Render's Logs tab) rather than pretending to send something it can't. To send real emails, set these environment variables (works with any SMTP provider — Gmail, Postmark, SendGrid's SMTP endpoint, etc.) on **both** the customer and seller services:
+
+```
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+FROM_EMAIL=noreply@yourdomain.com
+```
+
+Once all of `SMTP_HOST`/`SMTP_USER`/`SMTP_PASSWORD` are set, `send_email()` sends for real instead of logging.
 
 ### Scheduling rules
 
