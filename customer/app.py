@@ -286,7 +286,7 @@ def checkout():
         fulfillment = request.form.get("fulfillment", "pickup")
         notes = request.form.get("notes", "").strip()
         pickup_dt = scheduling.parse_pickup(request.form.get("pickup_date", ""), request.form.get("pickup_time", ""))
-        if not pickup_dt or not (earliest <= pickup_dt <= latest):
+        if not scheduling.is_pickup_valid(pickup_dt, prep_minutes):
             flash(f"Please choose a pickup time between now and {scheduling.MAX_ADVANCE_DAYS} days from now, "
                   f"allowing at least {prep_minutes} minutes for the order to be made.")
             seller = g.db.execute("SELECT * FROM seller_profiles WHERE id = ?", (cart["seller_id"],)).fetchone()
