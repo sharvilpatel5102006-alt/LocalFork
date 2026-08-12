@@ -13,7 +13,7 @@ This is built as **two separate websites that share one database**, the same way
 
 They're separate Flask apps, on separate ports, with separate templates — but both read/write the same `instance/localfork.db`, so a dish added in the seller portal appears on the customer site instantly, and an order placed on the customer site appears in the seller portal instantly. In production these become two subdomains (e.g. `localfork.com` and `sell.localfork.com`) pointed at the same database — nothing about the app logic needs to change for that.
 
-**Login is shared between the two sites** (same session cookie, same user table). If someone already has a buyer account and visits the seller portal, they're prompted to add a business profile to their existing account rather than creating a whole new one — again, exactly like Airbnb host/guest or Uber rider/driver sharing one identity.
+**Logins are independent between the two sites** — each uses its own session cookie, so you can be logged in as a different person on the customer site and the seller portal at the same time in the same browser (handy for testing: be "Buyer A" on one tab and "Seller B" on the other, with no incognito window needed). The underlying account table is still shared, though: if someone signs up as a buyer and later wants to sell, they log into the seller portal with the *same email/password* and get prompted to add a business profile to that existing account rather than creating a whole new one — same account, but each site remembers its own separate login.
 
 ## What's built
 
@@ -110,7 +110,7 @@ Everything above runs only on this computer. To get real public links, roughly i
    - Customer app: `SELLER_PORTAL_URL=https://sell.localfork.com`
    - Seller app: `CUSTOMER_SITE_URL=https://localfork.com`
 
-4. **Share login across the two subdomains.** Right now the shared-cookie trick works because both apps run on `localhost` (browsers ignore port when matching cookies). Once these are on real subdomains, set `SESSION_COOKIE_DOMAIN=".localfork.com"` (both apps, same `SECRET_KEY`) so the login cookie is valid on both `localfork.com` and `sell.localfork.com`.
+4. **Logins stay independent, which is intentional.** Each app uses its own cookie name (`localfork_customer_session` / `localfork_seller_session`), so being logged into one site never logs you into the other, even on real subdomains — matching how most real customer-app/merchant-portal pairs work. If you'd rather have true single-sign-on between them later, that would mean switching both apps to the same cookie name plus `SESSION_COOKIE_DOMAIN=".localfork.com"`, but note it also brings back the "can't be two different people in one browser" limitation this setup was changed to avoid.
 
 5. **Move off SQLite.** A single SQLite file is fine for testing but two separate deployed services hitting one file gets fragile fast. Use a hosted Postgres (Render, Railway, and Supabase all offer a free tier) — this is a change to `db.py` only, not to the app logic.
 

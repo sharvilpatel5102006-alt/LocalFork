@@ -14,6 +14,9 @@ from moderation import check_message  # noqa: E402
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB per upload
+# Separate cookie name from the customer site so you can be logged in as a
+# different person on each site in the same browser at the same time.
+app.config["SESSION_COOKIE_NAME"] = "localfork_seller_session"
 
 # Where the customer-facing site lives. In production this becomes something like
 # https://localfork.com — set the CUSTOMER_SITE_URL env var to point there.
@@ -108,7 +111,7 @@ def landing():
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
-    # Already have an account (maybe from the customer site, shared login)?
+    # Already logged into the seller portal but haven't set up a business yet?
     # Just need to add a seller profile, not a whole new account.
     if g.user:
         return redirect(url_for("become"))
@@ -151,8 +154,9 @@ def signup():
 
 @app.route("/become", methods=["GET", "POST"])
 def become():
-    """For someone who already has a LocalFork account (e.g. from the customer
-    site, since login is shared) but doesn't have a seller profile yet."""
+    """For someone logged into the seller portal (with an account that may
+    have started as a customer-site signup, since the users table is shared)
+    who doesn't have a seller profile yet."""
     if not g.user:
         flash("Please log in or sign up first.")
         return redirect(url_for("login"))

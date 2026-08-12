@@ -15,6 +15,9 @@ from moderation import check_message  # noqa: E402
 app = Flask(__name__, static_folder="../static", static_url_path="/static")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5MB per upload
+# Separate cookie name from the seller portal so you can be logged in as a
+# different person on each site in the same browser at the same time.
+app.config["SESSION_COOKIE_NAME"] = "localfork_customer_session"
 
 # Where the seller portal lives. In production this becomes something like
 # https://sell.localfork.com — set the SELLER_PORTAL_URL env var to point there.
